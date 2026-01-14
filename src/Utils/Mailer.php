@@ -6,12 +6,15 @@
 
 namespace Utils;
 
+// Load PHPMailer autoloader
+require_once __DIR__ . '/../../vendor/autoload.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 class Mailer
 {
-    private static $host = 'smtp.hostinger.com';
+    private static $host = 'smtp.titan.email';
     private static $port = 465;
     private static $username = 'thesteeperclimb@bedfordwebservices.com';
     private static $password = 'X#ZK~3QbuW|W]3=';
@@ -54,15 +57,20 @@ class Mailer
             // Send
             $mail->send();
             
-            error_log("Email sent successfully to: $to. Subject: $subject");
+            error_log("✓ Email sent successfully to: $to. Subject: $subject");
             return true;
 
         } catch (Exception $e) {
-            error_log("PHPMailer Error: " . $e->getMessage());
+            $errorMsg = "PHPMailer Error: " . $e->getMessage();
+            error_log("✗ " . $errorMsg);
             error_log("Error Code: " . $e->getCode());
+            error_log("SMTP Host: " . self::$host . ":" . self::$port);
+            error_log("To: " . $to);
+            error_log("Subject: " . $subject);
             return false;
         } catch (\Exception $e) {
-            error_log("General Email Error: " . $e->getMessage());
+            $errorMsg = "General Email Error: " . $e->getMessage();
+            error_log("✗ " . $errorMsg);
             return false;
         }
     }
@@ -74,7 +82,7 @@ class Mailer
     {
         $subject = "Welcome to The Steeper Climb - Set Up Your Account";
         
-        $htmlBody = self::getOrganizationWelcomeTemplate($organizationName, $contactPerson, $setupLink);
+        $htmlBody = self::getOrganizationWelcomeTemplate($organizationEmail, $organizationName, $contactPerson, $setupLink);
         $textBody = "Welcome to The Steeper Climb!\n\nYour organization account has been created. Please click the link below to set up your password:\n\n" . $setupLink;
 
         return self::send($organizationEmail, $subject, $htmlBody, $textBody);
@@ -83,7 +91,7 @@ class Mailer
     /**
      * Get organization welcome email template
      */
-    private static function getOrganizationWelcomeTemplate($organizationName, $contactPerson, $setupLink)
+    private static function getOrganizationWelcomeTemplate($organizationEmail, $organizationName, $contactPerson, $setupLink)
     {
         return <<<HTML
 <!DOCTYPE html>

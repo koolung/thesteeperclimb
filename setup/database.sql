@@ -248,12 +248,3 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   INDEX idx_is_read (is_read),
   INDEX idx_created_at (created_at)
 );
-
--- Create indexes for better query performance
-CREATE INDEX idx_users_organization_id ON users(organization_id);
-CREATE INDEX idx_users_role_status ON users(role, status);
-CREATE INDEX idx_organizations_status_created ON organizations(status, created_at);
-CREATE INDEX idx_courses_status_created ON courses(status, created_at);
-CREATE INDEX idx_student_progress_status_percentage ON student_progress(status, progress_percentage);
-CREATE INDEX idx_org_courses_assigned ON organization_courses(organization_id, assigned_at);
-CREATE INDEX idx_certificates_dates ON certificates(issued_date);
