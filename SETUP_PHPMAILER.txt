@@ -1,0 +1,74 @@
+# SETUP PHPMailer NOW - 3 STEPS
+
+## Step 1: Install PHPMailer
+
+**Choose ONE option:**
+
+### Option A - Easiest (Windows)
+```
+1. Double-click: install-phpmailer.bat
+2. Wait for it to complete
+3. Press Enter to close
+```
+
+### Option B - Manual (All Platforms)
+```
+1. Open PowerShell in project folder
+2. Type: composer install
+3. Press Enter
+```
+
+## Step 2: Verify Installation
+
+After installation, you should see:
+- Folder: `vendor/`
+- File: `vendor/autoload.php`
+
+**If you see these, you're good!** ✓
+
+## Step 3: Test It Works
+
+1. Open Admin Dashboard
+2. Go to: Organizations → Add Organization
+3. Fill in form and click Create
+4. Should see message: "Welcome email sent to..."
+5. Check the organization's email inbox
+6. Look for welcome email with password setup link
+
+**That's it!** 🎉
+
+---
+
+## What This Does
+
+When you create an organization:
+- ✓ Organization account created
+- ✓ Welcome email sent automatically
+- ✓ Email has "Set Password" button
+- ✓ Organization can set password and login
+
+## Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| "Composer not found" | Download from https://getcomposer.org/ |
+| "vendor/ folder missing" | Run `composer install` again |
+| "Email not arriving" | Check spam folder, verify internet connection |
+| "Authentication failed" | SMTP credentials are correct in code |
+
+## Quick Reference
+
+- **SMTP Host**: smtp.hostinger.com
+- **SMTP Port**: 465
+- **Encryption**: SSL
+- **From Email**: thesteeperclimb@bedfordwebservices.com
+
+## Need More Help?
+
+- `PHPMAILER_QUICK_START.md` - Expanded quick start
+- `PHPMAILER_SETUP.md` - Complete documentation
+- `EMAIL_TROUBLESHOOTING.md` - Problem solving
+
+---
+
+**TL;DR**: Run `composer install` and you're done!
