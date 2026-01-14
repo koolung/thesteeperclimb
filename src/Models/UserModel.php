@@ -35,12 +35,12 @@ class UserModel extends BaseModel {
      */
     public function findStudentsByOrganization($organization_id, $limit = null, $offset = 0) {
         $sql = "SELECT * FROM {$this->table} 
-                WHERE role = ? AND organization_id = ? AND status = ?";
+                WHERE role = ? AND status = ? AND organization_id = ?";
         if ($limit) {
             $sql .= " LIMIT $limit OFFSET $offset";
         }
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([ROLE_STUDENT, $organization_id, STATUS_ACTIVE]);
+        $stmt->execute([ROLE_STUDENT, STATUS_ACTIVE, $organization_id]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
@@ -50,9 +50,9 @@ class UserModel extends BaseModel {
     public function countStudentsByOrganization($organization_id) {
         $stmt = $this->pdo->prepare(
             "SELECT COUNT(*) as total FROM {$this->table} 
-             WHERE role = ? AND organization_id = ? AND status = ?"
+             WHERE role = ? AND status = ? AND organization_id = ?"
         );
-        $stmt->execute([ROLE_STUDENT, $organization_id, STATUS_ACTIVE]);
+        $stmt->execute([ROLE_STUDENT, STATUS_ACTIVE, $organization_id]);
         return $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     }
     

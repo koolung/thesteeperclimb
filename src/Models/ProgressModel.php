@@ -33,26 +33,39 @@ class ProgressModel extends BaseModel {
     }
     
     /**
-     * Get student's courses
+     * Get student's courses (filtered by organization)
      */
     public function getStudentCourses($student_id, $status = null) {
-        $sql = "SELECT sp.*, c.title, c.description, c.difficulty_level 
-                FROM {$this->table} sp
-                INNER JOIN courses c ON sp.course_id = c.id
-                WHERE sp.student_id = ?";
+        $sql = "SELECT 
+                c.id as course_id,
+                c.title,
+                c.description,
+                c.difficulty_level,
+                c.duration_hours,
+                c.status as course_status,
+                COALESCE(sp.id, 0) as progress_id,
+                COALESCE(sp.progress_percentage, 0) as progress_percentage,
+                COALESCE(sp.status, 'not_started') as progress_status,
+                COALESCE(sp.started_at, NULL) as started_at,
+                COALESCE(sp.completed_at, NULL) as completed_at,
+                COALESCE(sp.updated_at, c.created_at) as updated_at
+                FROM courses c
+                INNER JOIN organization_courses oc ON oc.course_id = c.id
+                INNER JOIN users u ON u.id = ? AND oc.organization_id = u.organization_id
+                LEFT JOIN {$this->table} sp ON sp.student_id = ? AND sp.course_id = c.id";
         
         if ($status) {
-            $sql .= " AND sp.status = ?";
+            $sql .= " WHERE sp.status = ?";
         }
         
-        $sql .= " ORDER BY sp.updated_at DESC";
+        $sql .= " ORDER BY c.created_at DESC";
         
         $stmt = $this->pdo->prepare($sql);
         
         if ($status) {
-            $stmt->execute([$student_id, $status]);
+            $stmt->execute([$student_id, $student_id, $status]);
         } else {
-            $stmt->execute([$student_id]);
+            $stmt->execute([$student_id, $student_id]);
         }
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -39,20 +39,36 @@ class Auth {
         $password_hash = password_hash($password, PASSWORD_BCRYPT);
         
         // Insert user
-        $stmt = self::$pdo->prepare('
-            INSERT INTO users (email, password_hash, first_name, last_name, role, status, organization_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ');
-        
-        return $stmt->execute([
-            $email,
-            $password_hash,
-            $first_name,
-            $last_name,
-            $role,
-            STATUS_ACTIVE,
-            $organization_id
-        ]);
+        if ($role === ROLE_STUDENT && $organization_id !== null) {
+            $stmt = self::$pdo->prepare('
+                INSERT INTO users (email, password_hash, first_name, last_name, role, status, organization_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ');
+            
+            return $stmt->execute([
+                $email,
+                $password_hash,
+                $first_name,
+                $last_name,
+                $role,
+                STATUS_ACTIVE,
+                $organization_id
+            ]);
+        } else {
+            $stmt = self::$pdo->prepare('
+                INSERT INTO users (email, password_hash, first_name, last_name, role, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ');
+            
+            return $stmt->execute([
+                $email,
+                $password_hash,
+                $first_name,
+                $last_name,
+                $role,
+                STATUS_ACTIVE
+            ]);
+        }
     }
     
     /**
@@ -60,7 +76,7 @@ class Auth {
      */
     public static function login($email, $password) {
         $stmt = self::$pdo->prepare('
-            SELECT id, email, password_hash, first_name, last_name, role, status, organization_id
+            SELECT id, email, password_hash, first_name, last_name, role, status
             FROM users
             WHERE email = ? AND status = ?
         ');
@@ -84,7 +100,6 @@ class Auth {
         $_SESSION['first_name'] = $user['first_name'];
         $_SESSION['last_name'] = $user['last_name'];
         $_SESSION['role'] = $user['role'];
-        $_SESSION['organization_id'] = $user['organization_id'];
         $_SESSION['login_time'] = time();
         
         return true;
@@ -125,8 +140,7 @@ class Auth {
             'email' => $_SESSION['email'],
             'first_name' => $_SESSION['first_name'],
             'last_name' => $_SESSION['last_name'],
-            'role' => $_SESSION['role'],
-            'organization_id' => $_SESSION['organization_id']
+            'role' => $_SESSION['role']
         ];
     }
     

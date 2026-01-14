@@ -79,7 +79,7 @@ $student_courses = $progressModel->getStudentCourses($user['id']);
                                 
                                 <p style="color: #666; font-size: 13px; margin: 10px 0;">
                                     Difficulty: <strong><?php echo ucfirst($course['difficulty_level']); ?></strong><br>
-                                    Status: <strong><?php echo ucfirst($course['status']); ?></strong>
+                                    Status: <strong><?php echo ucfirst($course['course_status']); ?></strong>
                                 </p>
                                 
                                 <a href="course.php?id=<?php echo $course['course_id']; ?>" class="btn btn-primary" style="width: 100%; text-align: center; margin-top: 15px;">

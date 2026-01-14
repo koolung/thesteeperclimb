@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'All fields are required';
         } else {
             try {
-                Auth::register($email, $password, $first_name, $last_name, ROLE_STUDENT, $user['organization_id']);
+                Auth::register($email, $password, $first_name, $last_name, ROLE_STUDENT, $user['id']);
                 
                 Utils::auditLog($pdo, $user['id'], 'CREATE_STUDENT', 'user', null, "Created student: $email");
                 
@@ -46,9 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $last_name = trim($_POST['last_name'] ?? '');
         $status = $_POST['status'] ?? STATUS_ACTIVE;
         
-        // Verify student belongs to this organization
+        // Verify student exists and has role 'student'
         $student = $userModel->findById($id);
-        if (!$student || $student['organization_id'] !== $user['organization_id']) {
+        if (!$student || $student['role'] !== ROLE_STUDENT) {
             header('Location: students.php?error=Student not found');
             exit;
         }
@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)$_GET['id'];
         $student = $userModel->findById($id);
         
-        // Verify student belongs to this organization
-        if (!$student || $student['organization_id'] !== $user['organization_id']) {
+        // Verify student exists and has role 'student'
+        if (!$student || $student['role'] !== ROLE_STUDENT) {
             header('Location: students.php?error=Student not found');
             exit;
         }
@@ -100,10 +100,10 @@ if (isset($_GET['message'])) {
 
 if ($action === 'list') {
     $page = (int)($_GET['page'] ?? 1);
-    $total = $userModel->countStudentsByOrganization($user['organization_id']);
+    $total = $userModel->countStudentsByOrganization($user['id']);
     $pagination = Utils::getPagination($page, $total);
     
-    $students = $userModel->findStudentsByOrganization($user['organization_id'], $pagination['limit'], $pagination['offset']);
+    $students = $userModel->findStudentsByOrganization($user['id'], $pagination['limit'], $pagination['offset']);
 }
 ?>
 <!DOCTYPE html>
@@ -217,7 +217,7 @@ if ($action === 'list') {
             <?php elseif ($action === 'edit' && isset($_GET['id'])): ?>
                 <?php
                     $student = $userModel->findById((int)$_GET['id']);
-                    if (!$student || $student['organization_id'] !== $user['organization_id']) {
+                    if (!$student || $student['role'] !== ROLE_STUDENT) {
                         header('Location: students.php?error=Student not found');
                         exit;
                     }

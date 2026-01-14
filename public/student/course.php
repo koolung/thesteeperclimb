@@ -33,12 +33,13 @@ if (!$course) {
     exit;
 }
 
-// Verify student has access to this course
+// Verify course is assigned to student's organization
 $stmt = $pdo->prepare(
     "SELECT oc.id FROM organization_courses oc
-     WHERE oc.course_id = ? AND oc.organization_id = ?"
+     INNER JOIN users u ON u.id = ?
+     WHERE oc.course_id = ? AND oc.organization_id = u.organization_id"
 );
-$stmt->execute([$course_id, $user['organization_id']]);
+$stmt->execute([$user['id'], $course_id]);
 if (!$stmt->fetch()) {
     header('Location: courses.php?error=You do not have access to this course');
     exit;

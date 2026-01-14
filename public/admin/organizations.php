@@ -289,53 +289,60 @@ if (isset($_GET['message'])) {
     </style>
 </head>
 <body>
-<div class="sidebar">
-    <div class="sidebar-header">
-        <h2>The Steeper Climb</h2>
-        <p>Admin Panel</p>
-    </div>
-    <nav class="sidebar-nav">
-        <a href="dashboard.php">Dashboard</a>
-        <a href="courses.php">Courses</a>
-        <a href="organizations.php" class="active">Organizations</a>
-        <a href="students.php">Students</a>
-        <a href="settings.php">Settings</a>
-        <a href="<?php echo APP_URL; ?>/public/logout.php">Logout</a>
-    </nav>
-</div>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>The Steeper Climb</h2>
+                <p>Admin Panel</p>
+            </div>
+            
+            <nav class="nav-menu">
+                <ul>
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li class="active"><a href="organizations.php">Organizations</a></li>
+                    <li><a href="courses.php">Courses</a></li>
+                    <li><a href="users.php">Users</a></li>
+                </ul>
+            </nav>
+            
+            <div class="user-info">
+                <p><?php echo htmlspecialchars($adminUser['first_name'] . ' ' . $adminUser['last_name']); ?></p>
+                <small><?php echo htmlspecialchars($adminUser['email']); ?></small>
+                <a href="<?php echo APP_URL; ?>/public/logout.php" class="logout-btn">Logout</a>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <header class="header">
+                <h1><?php echo $action === 'create' ? 'Create Organization' : ($action === 'edit' ? 'Edit Organization' : 'Organizations'); ?></h1>
+            </header>
 
-<div class="main-content">
-    <div class="header">
-        <h1><?php echo $action === 'create' ? 'Create Organization' : ($action === 'edit' ? 'Edit Organization' : 'Organizations'); ?></h1>
-    </div>
+            <?php if ($message): ?>
+                <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
+            <?php endif; ?>
 
-    <?php if ($message): ?>
-        <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
-    <?php endif; ?>
+            <?php if ($error): ?>
+                <div class="alert alert-error"><?php echo htmlspecialchars($error); ?></div>
+            <?php endif; ?>
 
-    <?php if ($error): ?>
-        <div class="alert alert-error"><?php echo htmlspecialchars($error); ?></div>
-    <?php endif; ?>
-
-    <?php if ($action === 'create' || $action === 'edit'): ?>
-        <!-- Form -->
-        <div class="content-section">
-            <form method="POST" action="organizations.php?action=<?php echo $action; ?><?php if ($action === 'edit') echo '&id=' . $editOrg['id']; ?>">
-                <div class="form-grid">
-                    <!-- Contact Information -->
-                    <div class="form-section">
-                        <h4>Contact Information</h4>
-                        <div class="form-group">
-                            <label>Email Address *</label>
-                            <input type="email" name="email" value="<?php echo htmlspecialchars($editOrg['email'] ?? ''); ?>" <?php echo $action === 'edit' ? 'readonly' : 'required'; ?>>
-                        </div>
-                        <div class="form-group">
-                            <label>First Name *</label>
-                            <input type="text" name="first_name" value="<?php echo htmlspecialchars($editOrg['first_name'] ?? ''); ?>" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Last Name *</label>
-                            <input type="text" name="last_name" value="<?php echo htmlspecialchars($editOrg['last_name'] ?? ''); ?>" required>
+            <?php if ($action === 'create' || $action === 'edit'): ?>
+                <section class="content-section">
+                    <form method="POST" action="organizations.php?action=<?php echo $action; ?><?php if ($action === 'edit') echo '&id=' . $editOrg['id']; ?>">
+                        <div class="form-grid">
+                            <!-- Contact Information -->
+                            <div class="form-section">
+                                <h4>Contact Information</h4>
+                                <div class="form-group">
+                                    <label>Email Address *</label>
+                                    <input type="email" name="email" value="<?php echo htmlspecialchars($editOrg['email'] ?? ''); ?>" <?php echo $action === 'edit' ? 'readonly' : 'required'; ?>>
+                                </div>
+                                <div class="form-group">
+                                    <label>First Name *</label>
+                                    <input type="text" name="first_name" value="<?php echo htmlspecialchars($editOrg['first_name'] ?? ''); ?>" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Last Name *</label>
+                                    <input type="text" name="last_name" value="<?php echo htmlspecialchars($editOrg['last_name'] ?? ''); ?>" required>
                         </div>
                         <div class="form-group">
                             <label>Phone</label>
@@ -415,63 +422,61 @@ if (isset($_GET['message'])) {
                         </select>
                     </div>
                 <?php endif; ?>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary"><?php echo $action === 'create' ? 'Create Organization' : 'Update Organization'; ?></button>
-                    <a href="organizations.php" class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
-        </div>
-
-    <?php else: ?>
-        <!-- List View -->
-        <div class="content-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                <h2>Organization Accounts</h2>
-                <a href="organizations.php?action=create" class="btn btn-primary">+ Create Organization</a>
-            </div>
-
-            <?php if (empty($organizations)): ?>
-                <p style="text-align: center; color: #666;">No organizations found. <a href="organizations.php?action=create">Create one now</a>.</p>
-            <?php else: ?>
-                <?php foreach ($organizations as $org): ?>
-                    <div class="org-card">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div>
-                                <h3><?php echo htmlspecialchars($org['organization_name']); ?></h3>
-                                <p style="margin: 0; color: #667eea; font-weight: 500;"><?php echo htmlspecialchars($org['email']); ?></p>
-                            </div>
-                            <span class="status-badge status-<?php echo $org['status']; ?>"><?php echo ucfirst($org['status']); ?></span>
-                        </div>
-
-                        <div class="org-info">
-                            <div>
-                                <p><strong>Contact Person:</strong> <?php echo htmlspecialchars($org['organization_contact_person'] ?: '-'); ?></p>
-                                <p><strong>Phone:</strong> <?php echo htmlspecialchars($org['phone'] ?: '-'); ?></p>
-                                <p><strong>City:</strong> <?php echo htmlspecialchars($org['organization_city'] ?: '-'); ?></p>
-                            </div>
-                            <div>
-                                <p><strong>Contact Email:</strong> <?php echo htmlspecialchars($org['organization_contact_email'] ?: '-'); ?></p>
-                                <p><strong>Website:</strong> <?php echo htmlspecialchars($org['organization_website'] ?: '-'); ?></p>
-                                <p><strong>Country:</strong> <?php echo htmlspecialchars($org['organization_country'] ?: '-'); ?></p>
-                            </div>
-                        </div>
-
-                        <?php if ($org['organization_description']): ?>
-                            <p style="margin: 15px 0 0 0; padding-top: 15px; border-top: 1px solid #eee; color: #666; font-size: 14px;">
-                                <?php echo htmlspecialchars(substr($org['organization_description'], 0, 150)); ?>...
-                            </p>
-                        <?php endif; ?>
-
-                        <div class="org-actions">
-                            <a href="organizations.php?action=edit&id=<?php echo $org['id']; ?>" class="btn-edit">Edit</a>
-                            <a href="organizations.php?action=delete&id=<?php echo $org['id']; ?>" class="btn-delete" onclick="return confirm('Are you sure you want to delete this organization?');">Delete</a>
-                        </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><?php echo $action === 'create' ? 'Create Organization' : 'Update Organization'; ?></button>
+                        <a href="organizations.php" class="btn btn-secondary">Cancel</a>
                     </div>
-                <?php endforeach; ?>
+                    </form>
+                </section>
+
+            <?php else: ?>
+                <!-- List View -->
+                <section class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                        <h2>Organization Accounts</h2>
+                        <a href="organizations.php?action=create" class="btn btn-primary">+ Create Organization</a>
+                    </div>            <?php if (empty($organizations)): ?>
+                    <p style="text-align: center; color: #666;">No organizations found. <a href="organizations.php?action=create">Create one now</a>.</p>
+            <?php else: ?>
+                    <?php foreach ($organizations as $org): ?>
+                        <div class="org-card">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <h3><?php echo htmlspecialchars($org['organization_name']); ?></h3>
+                                    <p style="margin: 0; color: #667eea; font-weight: 500;"><?php echo htmlspecialchars($org['email']); ?></p>
+                                </div>
+                                <span class="status-badge status-<?php echo $org['status']; ?>"><?php echo ucfirst($org['status']); ?></span>
+                            </div>
+
+                            <div class="org-info">
+                                <div>
+                                    <p><strong>Contact Person:</strong> <?php echo htmlspecialchars($org['organization_contact_person'] ?: '-'); ?></p>
+                                    <p><strong>Phone:</strong> <?php echo htmlspecialchars($org['phone'] ?: '-'); ?></p>
+                                    <p><strong>City:</strong> <?php echo htmlspecialchars($org['organization_city'] ?: '-'); ?></p>
+                                </div>
+                                <div>
+                                    <p><strong>Contact Email:</strong> <?php echo htmlspecialchars($org['organization_contact_email'] ?: '-'); ?></p>
+                                    <p><strong>Website:</strong> <?php echo htmlspecialchars($org['organization_website'] ?: '-'); ?></p>
+                                    <p><strong>Country:</strong> <?php echo htmlspecialchars($org['organization_country'] ?: '-'); ?></p>
+                                </div>
+                            </div>
+
+                            <?php if ($org['organization_description']): ?>
+                                <p style="margin: 15px 0 0 0; padding-top: 15px; border-top: 1px solid #eee; color: #666; font-size: 14px;">
+                                    <?php echo htmlspecialchars(substr($org['organization_description'], 0, 150)); ?>...
+                                </p>
+                            <?php endif; ?>
+
+                            <div class="org-actions">
+                                <a href="organizations.php?action=edit&id=<?php echo $org['id']; ?>" class="btn-edit">Edit</a>
+                                <a href="organizations.php?action=delete&id=<?php echo $org['id']; ?>" class="btn-delete" onclick="return confirm('Are you sure you want to delete this organization?');">Delete</a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
             <?php endif; ?>
-        </div>
-    <?php endif; ?>
-</div>
+                </section>
+            <?php endif; ?>
+        </main>
+    </div>
 </body>
 </html>

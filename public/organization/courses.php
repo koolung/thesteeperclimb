@@ -15,14 +15,14 @@ Auth::requireRole(ROLE_ORGANIZATION);
 $courseModel = new CourseModel($pdo);
 $user = Auth::getCurrentUser();
 
-// Get organization's courses
+// Get organization's courses (show all statuses)
 $stmt = $pdo->prepare(
     "SELECT c.* FROM courses c
      INNER JOIN organization_courses oc ON c.id = oc.course_id
-     WHERE oc.organization_id = ? AND c.status = ?
+     WHERE oc.organization_id = ?
      ORDER BY c.created_at DESC"
 );
-$stmt->execute([$user['organization_id'], COURSE_PUBLISHED]);
+$stmt->execute([$user['id']]);
 $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -85,13 +85,7 @@ $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <tbody>
                                 <?php foreach ($courses as $course): ?>
                                     <?php
-                                        // Count students in this course
-                                        $stmt = $pdo->prepare(
-                                            "SELECT COUNT(*) as count FROM student_progress 
-                                             WHERE course_id = ? AND (
-                                                SELECT organization_id FROM users WHERE id = ?) = ?"
-                                        );
-                                        // Get count of students enrolled in this course from our org
+                                        // Get count of students enrolled in this course
                                         $stmt = $pdo->prepare(
                                             "SELECT COUNT(DISTINCT sp.student_id) as count 
                                              FROM student_progress sp
@@ -107,7 +101,7 @@ $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <td><?php echo $course['duration_hours'] ? $course['duration_hours'] . ' hrs' : 'N/A'; ?></td>
                                         <td><?php echo $enrollment; ?></td>
                                         <td>
-                                            <a href="<?php echo APP_URL; ?>/public/admin/course-editor.php?id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">View Details</a>
+                                            <a href="course-editor.php?id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">View Details</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

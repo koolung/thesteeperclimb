@@ -71,8 +71,8 @@ class CertificateModel extends BaseModel {
     public function countByOrganization($organization_id) {
         $stmt = $this->pdo->prepare(
             "SELECT COUNT(*) as total FROM {$this->table} c
-             INNER JOIN users u ON c.student_id = u.id
-             WHERE u.organization_id = ?"
+             INNER JOIN organization_courses oc ON c.course_id = oc.course_id
+             WHERE oc.organization_id = ?"
         );
         $stmt->execute([$organization_id]);
         return $stmt->fetch(PDO::FETCH_ASSOC)['total'];

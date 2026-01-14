@@ -18,19 +18,19 @@ $certModel = new CertificateModel($pdo);
 $user = Auth::getCurrentUser();
 
 // Get organization statistics
-$student_count = $userModel->countStudentsByOrganization($user['organization_id']);
-$cert_count = $certModel->countByOrganization($user['organization_id']);
+$student_count = $userModel->countStudentsByOrganization($user['id']);
+$cert_count = $certModel->countByOrganization($user['id']);
 
-// Get student progress
+// Get student progress (filtered by organization)
 $stmt = $pdo->prepare(
     "SELECT u.id, u.first_name, u.last_name, sp.course_id, c.title, sp.progress_percentage, sp.status
      FROM users u
      LEFT JOIN student_progress sp ON u.id = sp.student_id
      LEFT JOIN courses c ON sp.course_id = c.id
-     WHERE u.organization_id = ? AND u.role = ?
+     WHERE u.role = ? AND u.organization_id = ?
      ORDER BY u.first_name, u.last_name, c.title"
 );
-$stmt->execute([$user['organization_id'], ROLE_STUDENT]);
+$stmt->execute([ROLE_STUDENT, $user['id']]);
 $progress_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Organize progress by student

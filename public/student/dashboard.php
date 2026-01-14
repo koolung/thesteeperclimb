@@ -7,7 +7,6 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/CourseModel.php';
 require_once __DIR__ . '/../../src/Models/ProgressModel.php';
-
 require_once __DIR__ . '/../../src/Utils/Utils.php';
 
 $pdo = getMainDatabaseConnection();
@@ -63,7 +62,6 @@ $certificates = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             <div class="user-info">
                 <p><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></p>
-                <small><?php echo htmlspecialchars($organization['name'] ?? 'Organization'); ?></small>
                 <a href="<?php echo APP_URL; ?>/public/logout.php" class="logout-btn">Logout</a>
             </div>
         </aside>
@@ -128,7 +126,7 @@ $certificates = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <small style="color: #999; display: block; margin-top: 5px;"><?php echo $course['progress_percentage']; ?>% Complete</small>
                                 </div>
                                 <small style="color: #999; display: block; margin-top: 10px;">
-                                    Status: <strong><?php echo ucfirst($course['status']); ?></strong>
+                                    Status: <strong><?php echo ucfirst($course['course_status']); ?></strong>
                                 </small>
                             </div>
                         <?php endforeach; ?>

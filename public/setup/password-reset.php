@@ -57,10 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
             error_log("User lookup: " . ($org_user ? 'Found' : 'Not found'));
             if ($org_user) {
                 error_log("  User ID: " . $org_user['id']);
-                error_log("  User org_id: " . ($org_user['organization_id'] ?: 'null'));
+                error_log("  Org_id from URL: " . $org_id);
             }
             
-            if (!$org_user || $org_user['organization_id'] != $org_id) {
+            // org_id in URL now references the user.id directly (organization IS the user)
+            if (!$org_user || $org_user['id'] != $org_id) {
                 error_log("Invalid credentials: User not found or organization mismatch");
                 $error = 'Invalid organization credentials';
             } else {
