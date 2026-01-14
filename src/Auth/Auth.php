@@ -164,7 +164,7 @@ class Auth {
     /**
      * Validate password strength
      */
-    private static function validatePassword($password) {
+    public static function validatePassword($password) {
         if (strlen($password) < MIN_PASSWORD_LENGTH) {
             return false;
         }

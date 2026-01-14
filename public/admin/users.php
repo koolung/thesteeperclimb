@@ -26,13 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $first_name = trim($_POST['first_name'] ?? '');
         $last_name = trim($_POST['last_name'] ?? '');
         $role = $_POST['role'] ?? ROLE_STUDENT;
-        $organization_id = !empty($_POST['organization_id']) ? (int)$_POST['organization_id'] : null;
         
         if (empty($email) || empty($password) || empty($first_name) || empty($last_name)) {
             $error = 'All fields are required';
         } else {
             try {
-                Auth::register($email, $password, $first_name, $last_name, $role, $organization_id);
+                Auth::register($email, $password, $first_name, $last_name, $role);
                 
                 Utils::auditLog($pdo, $user['id'], 'CREATE', 'user', null, "Created user: $email");
                 
@@ -212,24 +211,9 @@ if ($action === 'list') {
                         
                         <div class="form-group">
                             <label for="role">Role *</label>
-                            <select id="role" name="role" required onchange="toggleOrgSelection()">
+                            <select id="role" name="role" required>
                                 <option value="<?php echo ROLE_ADMIN; ?>">Admin</option>
-                                <option value="<?php echo ROLE_ORGANIZATION; ?>">Organization</option>
                                 <option value="<?php echo ROLE_STUDENT; ?>" selected>Student</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group" id="org-selection" style="display: none;">
-                            <label for="organization_id">Organization</label>
-                            <select id="organization_id" name="organization_id">
-                                <option value="">-- Select Organization --</option>
-                                <?php
-                                    $stmt = $pdo->prepare("SELECT id, name FROM organizations WHERE status = ?");
-                                    $stmt->execute([STATUS_ACTIVE]);
-                                    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $org) {
-                                        echo '<option value="' . $org['id'] . '">' . htmlspecialchars($org['name']) . '</option>';
-                                    }
-                                ?>
                             </select>
                         </div>
                         
@@ -238,14 +222,6 @@ if ($action === 'list') {
                             <a href="users.php" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>
-                    
-                    <script>
-                        function toggleOrgSelection() {
-                            const role = document.getElementById('role').value;
-                            const orgSelection = document.getElementById('org-selection');
-                            orgSelection.style.display = role === '<?php echo ROLE_STUDENT; ?>' ? 'block' : 'none';
-                        }
-                    </script>
                 </section>
             
             <?php elseif ($action === 'edit' && isset($_GET['id'])): ?>

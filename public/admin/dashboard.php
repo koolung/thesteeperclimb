@@ -6,7 +6,6 @@
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/UserModel.php';
-require_once __DIR__ . '/../../src/Models/OrganizationModel.php';
 require_once __DIR__ . '/../../src/Models/CourseModel.php';
 require_once __DIR__ . '/../../src/Utils/Utils.php';
 
@@ -15,11 +14,10 @@ Auth::initialize($pdo);
 Auth::requireRole(ROLE_ADMIN);
 
 $userModel = new UserModel($pdo);
-$orgModel = new OrganizationModel($pdo);
 $courseModel = new CourseModel($pdo);
 
 // Get statistics
-$total_organizations = $orgModel->countActive();
+$total_organizations = count($userModel->findByRole(ROLE_ORGANIZATION));
 $total_users = $userModel->count();
 $total_courses = $courseModel->count();
 

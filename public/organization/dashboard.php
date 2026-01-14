@@ -7,7 +7,6 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/UserModel.php';
 require_once __DIR__ . '/../../src/Models/CourseModel.php';
-require_once __DIR__ . '/../../src/Models/OrganizationModel.php';
 require_once __DIR__ . '/../../src/Utils/Utils.php';
 
 $pdo = getMainDatabaseConnection();
@@ -16,13 +15,12 @@ Auth::requireRole(ROLE_ORGANIZATION);
 
 $userModel = new UserModel($pdo);
 $courseModel = new CourseModel($pdo);
-$orgModel = new OrganizationModel($pdo);
 $user = Auth::getCurrentUser();
 
-// Get organization details
-$organization = $orgModel->getWithStats($user['organization_id']);
-$student_count = $userModel->countStudentsByOrganization($user['organization_id']);
-$course_count = $courseModel->countForOrganization($user['organization_id']);
+// Organization details are now in the user record
+$organization = $user;
+$student_count = $userModel->countStudentsByOrganization($user['id']);
+$course_count = $courseModel->countForOrganization($user['id']);
 
 // Get latest courses
 $stmt = $pdo->prepare(
@@ -31,7 +29,7 @@ $stmt = $pdo->prepare(
      WHERE oc.organization_id = ? AND c.status = ?
      ORDER BY c.created_at DESC LIMIT 5"
 );
-$stmt->execute([$user['organization_id'], COURSE_PUBLISHED]);
+$stmt->execute([$user['id'], COURSE_PUBLISHED]);
 $recent_courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -62,7 +60,7 @@ $recent_courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             <div class="user-info">
                 <p><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></p>
-                <small><?php echo htmlspecialchars($organization['name'] ?? ''); ?></small>
+                <small><?php echo htmlspecialchars($organization['organization_name'] ?? ''); ?></small>
                 <a href="<?php echo APP_URL; ?>/public/logout.php" class="logout-btn">Logout</a>
             </div>
         </aside>
@@ -71,7 +69,7 @@ $recent_courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <main class="main-content">
             <header class="header">
                 <h1>Organization Dashboard</h1>
-                <p>Welcome back, <?php echo htmlspecialchars($organization['name'] ?? 'Organization'); ?>!</p>
+                <p>Welcome back, <?php echo htmlspecialchars($organization['organization_name'] ?? 'Organization'); ?>!</p>
             </header>
             
             <!-- Statistics Cards -->

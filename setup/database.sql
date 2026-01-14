@@ -11,40 +11,27 @@ CREATE TABLE IF NOT EXISTS `users` (
   `last_name` VARCHAR(100) NOT NULL,
   `role` ENUM('admin', 'organization', 'student') NOT NULL,
   `status` ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
-  `organization_id` INT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `last_login` DATETIME NULL,
   `phone` VARCHAR(20) NULL,
+  -- Organization-specific fields (used when role='organization')
+  `organization_name` VARCHAR(255) NULL,
+  `organization_description` TEXT NULL,
+  `organization_website` VARCHAR(255) NULL,
+  `organization_address` TEXT NULL,
+  `organization_city` VARCHAR(100) NULL,
+  `organization_state` VARCHAR(50) NULL,
+  `organization_postal_code` VARCHAR(20) NULL,
+  `organization_country` VARCHAR(100) NULL,
+  `organization_contact_person` VARCHAR(255) NULL,
+  `organization_contact_email` VARCHAR(255) NULL,
+  `organization_contact_phone` VARCHAR(20) NULL,
+  `created_by` INT NULL,
   INDEX idx_email (email),
   INDEX idx_role (role),
-  INDEX idx_organization_id (organization_id),
-  INDEX idx_status (status)
-);
-
--- Organizations Table
-CREATE TABLE IF NOT EXISTS `organizations` (
-  `id` INT PRIMARY KEY AUTO_INCREMENT,
-  `name` VARCHAR(255) NOT NULL,
-  `description` TEXT NULL,
-  `website` VARCHAR(255) NULL,
-  `email` VARCHAR(255) NOT NULL UNIQUE,
-  `phone` VARCHAR(20) NULL,
-  `address` TEXT NULL,
-  `city` VARCHAR(100) NULL,
-  `state` VARCHAR(50) NULL,
-  `postal_code` VARCHAR(20) NULL,
-  `country` VARCHAR(100) NULL,
-  `contact_person` VARCHAR(255) NULL,
-  `contact_email` VARCHAR(255) NULL,
-  `contact_phone` VARCHAR(20) NULL,
-  `status` ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
-  `created_by` INT NOT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
   INDEX idx_status (status),
-  INDEX idx_created_at (created_at)
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Courses Table
@@ -131,14 +118,14 @@ CREATE TABLE IF NOT EXISTS `question_options` (
   UNIQUE KEY unique_question_order (question_id, `order`)
 );
 
--- Course Organization Subscription
+-- Course Organization Subscription (organization_id now references organization user's id from users table)
 CREATE TABLE IF NOT EXISTS `organization_courses` (
   `id` INT PRIMARY KEY AUTO_INCREMENT,
   `organization_id` INT NOT NULL,
   `course_id` INT NOT NULL,
   `assigned_by` INT NOT NULL,
   `assigned_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+  FOREIGN KEY (organization_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
   FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE RESTRICT,
   UNIQUE KEY unique_org_course (organization_id, course_id),

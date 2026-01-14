@@ -4,46 +4,89 @@
  * Link sent via email allows organizations to set their password
  */
 
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../src/Auth/Auth.php';
-require_once __DIR__ . '/../src/Models/UserModel.php';
-require_once __DIR__ . '/../src/Utils/Utils.php';
+require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../src/Auth/Auth.php';
+require_once __DIR__ . '/../../src/Models/UserModel.php';
+require_once __DIR__ . '/../../src/Utils/Utils.php';
 
 $pdo = getMainDatabaseConnection();
 Auth::initialize($pdo);
 
 $error = '';
 $success = '';
-$org_id = isset($_GET['org_id']) ? (int)$_GET['org_id'] : 0;
-$email = isset($_GET['email']) ? trim($_GET['email']) : '';
 
+// Get org_id and email from GET (initial page load) or POST (form submission)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $org_id = isset($_POST['org_id']) ? (int)$_POST['org_id'] : 0;
+    $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+} else {
+    $org_id = isset($_GET['org_id']) ? (int)$_GET['org_id'] : 0;
+    $email = isset($_GET['email']) ? trim(urldecode($_GET['email'])) : '';
+}
+
+// Validate that we have the required parameters
+if (!$org_id || !$email) {
+    $error = 'Invalid setup link. Please check the email link and try again.';
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
     $password = $_POST['password'] ?? '';
     $password_confirm = $_POST['password_confirm'] ?? '';
     
+    error_log("Password Reset Form Submission:");
+    error_log("  Email: $email");
+    error_log("  Org ID: $org_id");
+    error_log("  Password provided: " . (!empty($password) ? 'Yes' : 'No'));
+    error_log("  Passwords match: " . ($password === $password_confirm ? 'Yes' : 'No'));
+    
     if (empty($password) || empty($password_confirm)) {
         $error = 'Both password fields are required';
+        error_log("Error: Empty password fields");
     } elseif ($password !== $password_confirm) {
         $error = 'Passwords do not match';
+        error_log("Error: Passwords do not match");
     } elseif (!Auth::validatePassword($password)) {
         $error = 'Password does not meet requirements: minimum 8 characters, 1 uppercase letter, 1 number, 1 special character';
+        error_log("Error: Password does not meet requirements");
     } else {
+        error_log("Password validation passed, attempting to update...");
         try {
             $userModel = new UserModel($pdo);
             $org_user = $userModel->findByEmail($email);
             
+            error_log("User lookup: " . ($org_user ? 'Found' : 'Not found'));
+            if ($org_user) {
+                error_log("  User ID: " . $org_user['id']);
+                error_log("  User org_id: " . ($org_user['organization_id'] ?: 'null'));
+            }
+            
             if (!$org_user || $org_user['organization_id'] != $org_id) {
+                error_log("Invalid credentials: User not found or organization mismatch");
                 $error = 'Invalid organization credentials';
             } else {
                 // Update password
+                error_log("Updating password for user ID: " . $org_user['id']);
+                $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+                error_log("Password hash created: " . substr($passwordHash, 0, 20) . "...");
+                
                 $stmt = $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
-                $stmt->execute([password_hash($password, PASSWORD_BCRYPT), $org_user['id']]);
+                $result = $stmt->execute([$passwordHash, $org_user['id']]);
+                
+                if ($result) {
+                    error_log("✓ Password updated successfully");
+                    error_log("  User ID: " . $org_user['id']);
+                    error_log("  Email: " . $org_user['email']);
+                } else {
+                    error_log("✗ Error updating password: " . implode(", ", $stmt->errorInfo()));
+                }
                 
                 Utils::auditLog($pdo, $org_user['id'], 'SET_PASSWORD', 'user', $org_user['id'], 'Organization set password');
                 
                 $success = 'Password set successfully! You can now log in.';
+                error_log("Success message set");
             }
         } catch (Exception $e) {
+            error_log("Exception during password reset: " . $e->getMessage());
             $error = 'An error occurred: ' . $e->getMessage();
         }
     }
@@ -279,6 +322,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST">
+                <!-- Hidden fields to preserve org_id and email on form submit -->
+                <input type="hidden" name="org_id" value="<?php echo htmlspecialchars($org_id); ?>">
+                <input type="hidden" name="email" value="<?php echo htmlspecialchars($email); ?>">
+                
                 <div class="form-group">
                     <label>Email Address</label>
                     <input type="email" value="<?php echo htmlspecialchars($email); ?>" disabled>

@@ -6,7 +6,7 @@
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/CourseModel.php';
-require_once __DIR__ . '/../../src/Models/OrganizationModel.php';
+require_once __DIR__ . '/../../src/Models/UserModel.php';
 require_once __DIR__ . '/../../src/Utils/Utils.php';
 
 $pdo = getMainDatabaseConnection();
@@ -14,7 +14,7 @@ Auth::initialize($pdo);
 Auth::requireRole(ROLE_ADMIN);
 
 $courseModel = new CourseModel($pdo);
-$orgModel = new OrganizationModel($pdo);
+$userModel = new UserModel($pdo);
 $user = Auth::getCurrentUser();
 $action = $_GET['action'] ?? 'list';
 $message = '';
@@ -334,13 +334,13 @@ if ($action === 'list') {
                             <label>Select Organizations</label>
                             <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto;">
                                 <?php
-                                    $organizations = $orgModel->getActive(100, 0);
+                                    $organizations = $userModel->findByRole(ROLE_ORGANIZATION);
                                     foreach ($organizations as $org) {
                                         $checked = in_array($org['id'], $assigned_orgs) ? 'checked' : '';
                                         echo '<div style="margin-bottom: 10px;">
                                             <input type="checkbox" id="org_' . $org['id'] . '" name="organization_ids[]" value="' . $org['id'] . '" ' . $checked . '>
                                             <label for="org_' . $org['id'] . '" style="display: inline; font-weight: normal;">
-                                                ' . htmlspecialchars($org['name']) . '
+                                                ' . htmlspecialchars($org['organization_name']) . '
                                             </label>
                                         </div>';
                                     }

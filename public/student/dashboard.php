@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/CourseModel.php';
 require_once __DIR__ . '/../../src/Models/ProgressModel.php';
-require_once __DIR__ . '/../../src/Models/OrganizationModel.php';
+
 require_once __DIR__ . '/../../src/Utils/Utils.php';
 
 $pdo = getMainDatabaseConnection();
@@ -16,11 +16,7 @@ Auth::requireRole(ROLE_STUDENT);
 
 $courseModel = new CourseModel($pdo);
 $progressModel = new ProgressModel($pdo);
-$orgModel = new OrganizationModel($pdo);
 $user = Auth::getCurrentUser();
-
-// Get organization info
-$organization = $orgModel->findById($user['organization_id']);
 
 // Get student's courses
 $student_courses = $progressModel->getStudentCourses($user['id']);
