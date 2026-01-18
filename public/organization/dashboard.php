@@ -129,8 +129,7 @@ $recent_courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <h3><?php echo htmlspecialchars($course['title']); ?></h3>
                                 <p><?php echo htmlspecialchars(substr($course['description'] ?? '', 0, 100)); ?>...</p>
                                 <small style="color: #999;">
-                                    Instructor: <?php echo htmlspecialchars($course['instructor_name'] ?? 'N/A'); ?><br>
-                                    Difficulty: <?php echo ucfirst($course['difficulty_level']); ?>
+                                    Instructor: <?php echo htmlspecialchars($course['instructor_name'] ?? 'N/A'); ?>
                                 </small>
                             </div>
                         <?php endforeach; ?>

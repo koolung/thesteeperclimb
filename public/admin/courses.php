@@ -81,21 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = $e->getMessage();
             }
         }
-    } elseif ($action === 'delete' && isset($_GET['id'])) {
-        $id = (int)$_GET['id'];
-        $course = $courseModel->findById($id);
-        
-        if ($course) {
-            try {
-                $courseModel->delete($id);
-                Utils::auditLog($pdo, $user['id'], 'DELETE', 'course', $id, 'Deleted course: ' . $course['title']);
-                
-                header('Location: courses.php?message=Course deleted successfully');
-                exit;
-            } catch (Exception $e) {
-                $error = $e->getMessage();
-            }
-        }
     } elseif ($action === 'assign' && isset($_POST['course_id'])) {
         $course_id = (int)$_POST['course_id'];
         $organization_ids = $_POST['organization_ids'] ?? [];
@@ -124,6 +109,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Handle delete action (moved outside POST block to handle GET requests)
+if ($action === 'delete' && isset($_GET['id'])) {
+    $id = (int)$_GET['id'];
+    $course = $courseModel->findById($id);
+    
+    if ($course) {
+        try {
+            $courseModel->delete($id);
+            Utils::auditLog($pdo, $user['id'], 'DELETE', 'course', $id, 'Deleted course: ' . $course['title']);
+            
+            header('Location: courses.php?message=Course deleted successfully');
+            exit;
+        } catch (Exception $e) {
+            $error = $e->getMessage();
+        }
+    }
+}
+
 // Get message from query parameter
 if (isset($_GET['message'])) {
     $message = htmlspecialchars($_GET['message']);
@@ -131,9 +134,48 @@ if (isset($_GET['message'])) {
 
 if ($action === 'list') {
     $page = (int)($_GET['page'] ?? 1);
-    $total = $courseModel->count();
+    $search = trim($_GET['search'] ?? '');
+    $difficulty_filter = $_GET['difficulty'] ?? '';
+    $status_filter = $_GET['status'] ?? '';
+    
+    // Build query with search and filters
+    $where = [];
+    $params = [];
+    
+    if ($search) {
+        $where[] = "(title LIKE ? OR description LIKE ? OR instructor_name LIKE ?)";
+        $search_term = "%$search%";
+        $params[] = $search_term;
+        $params[] = $search_term;
+        $params[] = $search_term;
+    }
+    
+    if ($difficulty_filter) {
+        $where[] = "difficulty_level = ?";
+        $params[] = $difficulty_filter;
+    }
+    
+    if ($status_filter) {
+        $where[] = "status = ?";
+        $params[] = $status_filter;
+    }
+    
+    $whereClause = !empty($where) ? "WHERE " . implode(" AND ", $where) : "";
+    
+    // Get total count
+    $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM courses $whereClause");
+    $countStmt->execute($params);
+    $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
     $pagination = Utils::getPagination($page, $total);
-    $courses = $courseModel->findAll($pagination['limit'], $pagination['offset']);
+    $limit = (int)$pagination['limit'];
+    $offset = (int)$pagination['offset'];
+    
+    // Get filtered and paginated courses
+    $sql = "SELECT * FROM courses $whereClause ORDER BY created_at DESC LIMIT $limit OFFSET $offset";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $courses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -183,37 +225,77 @@ if ($action === 'list') {
             
             <?php if ($action === 'list'): ?>
                 <section class="content-section">
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Course Title</th>
-                                    <th>Instructor</th>
-                                    <th>Difficulty</th>
-                                    <th>Status</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($courses as $course): ?>
-                                    <tr>
-                                        <td><strong><?php echo htmlspecialchars($course['title']); ?></strong></td>
-                                        <td><?php echo htmlspecialchars($course['instructor_name'] ?? 'N/A'); ?></td>
-                                        <td><?php echo ucfirst($course['difficulty_level']); ?></td>
-                                        <td><span class="badge badge-<?php echo strtolower($course['status']); ?>"><?php echo ucfirst($course['status']); ?></span></td>
-                                        <td><?php echo Utils::formatDate($course['created_at']); ?></td>
-                                        <td>
-                                            <a href="course-editor.php?id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Manage</a>
-                                            <a href="courses.php?action=edit&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Edit</a>
-                                            <a href="courses.php?action=assign&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Assign</a>
-                                            <a href="courses.php?action=delete&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <!-- Search and Filter Bar -->
+                    <div style="margin-bottom: 20px; display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; align-items: end;">
+                        <div>
+                            <form method="GET" style="display: flex; gap: 10px;">
+                                <input type="hidden" name="action" value="list">
+                                <input type="text" name="search" placeholder="Search by title, instructor..." value="<?php echo htmlspecialchars($search); ?>" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">Search</button>
+                                <?php if ($search || $difficulty_filter || $status_filter): ?>
+                                    <a href="courses.php" class="btn btn-secondary" style="padding: 10px 20px;">Clear</a>
+                                <?php endif; ?>
+                            </form>
+                        </div>
+                        <form method="GET" style="display: flex; gap: 5px;">
+                            <input type="hidden" name="action" value="list">
+                            <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                            <select name="status" onchange="this.form.submit()" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <option value="">All Statuses</option>
+                                <option value="draft" <?php echo $status_filter === 'draft' ? 'selected' : ''; ?>>Draft</option>
+                                <option value="published" <?php echo $status_filter === 'published' ? 'selected' : ''; ?>>Published</option>
+                                <option value="archived" <?php echo $status_filter === 'archived' ? 'selected' : ''; ?>>Archived</option>
+                            </select>
+                        </form>
                     </div>
+                    
+                    <!-- Search Results Info -->
+                    <?php if ($search || $difficulty_filter || $status_filter): ?>
+                        <div style="margin-bottom: 20px; padding: 10px; background: #e8f4f8; border-radius: 5px; font-size: 13px; color: #0066cc;">
+                            <?php 
+                            $filter_text = [];
+                            if ($search) $filter_text[] = "title/instructor containing '" . htmlspecialchars($search) . "'";
+                            if ($status_filter) $filter_text[] = "status = " . ucfirst($status_filter);
+                            echo "Showing courses matching: " . implode(" and ", $filter_text) . " (" . $total . " results)";
+                            ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (empty($courses)): ?>
+                        <div style="padding: 40px; text-align: center; color: #999;">
+                            <p>No courses found. <?php if ($search || $status_filter): ?>Try adjusting your search or filters.<?php else: ?><a href="courses.php?action=create">Create your first course</a>.<?php endif; ?></p>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Course Title</th>
+                                        <th>Instructor</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($courses as $course): ?>
+                                        <tr>
+                                            <td><strong><?php echo htmlspecialchars($course['title']); ?></strong></td>
+                                            <td><?php echo htmlspecialchars($course['instructor_name'] ?? 'N/A'); ?></td>
+                                            <td><span class="badge badge-<?php echo strtolower($course['status']); ?>"><?php echo ucfirst($course['status']); ?></span></td>
+                                            <td><?php echo Utils::formatDate($course['created_at']); ?></td>
+                                            <td>
+                                                <a href="course-editor.php?id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Manage</a>
+                                                <a href="courses.php?action=edit&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Edit</a>
+                                                <a href="courses.php?action=assign&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary">Assign</a>
+                                                <a href="courses.php?action=delete&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </section>
             
             <?php elseif ($action === 'create'): ?>
@@ -233,15 +315,6 @@ if ($action === 'list') {
                         <div class="form-group">
                             <label for="instructor_name">Instructor Name</label>
                             <input type="text" id="instructor_name" name="instructor_name">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="difficulty_level">Difficulty Level</label>
-                            <select id="difficulty_level" name="difficulty_level">
-                                <option value="beginner">Beginner</option>
-                                <option value="intermediate">Intermediate</option>
-                                <option value="advanced">Advanced</option>
-                            </select>
                         </div>
                         
                         <div class="form-group">
@@ -280,15 +353,6 @@ if ($action === 'list') {
                         <div class="form-group">
                             <label for="instructor_name">Instructor Name</label>
                             <input type="text" id="instructor_name" name="instructor_name" value="<?php echo htmlspecialchars($course['instructor_name'] ?? ''); ?>">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="difficulty_level">Difficulty Level</label>
-                            <select id="difficulty_level" name="difficulty_level">
-                                <option value="beginner" <?php echo $course['difficulty_level'] === 'beginner' ? 'selected' : ''; ?>>Beginner</option>
-                                <option value="intermediate" <?php echo $course['difficulty_level'] === 'intermediate' ? 'selected' : ''; ?>>Intermediate</option>
-                                <option value="advanced" <?php echo $course['difficulty_level'] === 'advanced' ? 'selected' : ''; ?>>Advanced</option>
-                            </select>
                         </div>
                         
                         <div class="form-group">

@@ -38,16 +38,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type'])) {
         if ($_POST['type'] === 'add_chapter') {
             $title = trim($_POST['title'] ?? '');
             $description = trim($_POST['description'] ?? '');
-            $order = (int)($_POST['order'] ?? 1);
             
             if (empty($title)) {
                 $error = 'Chapter title is required';
             } else {
+                // Get the next order number for this course
+                $stmt = $pdo->prepare(
+                    "SELECT MAX(`order`) as max_order FROM chapters WHERE course_id = ?"
+                );
+                $stmt->execute([$course_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $next_order = ($result['max_order'] ?? 0) + 1;
+                
                 $stmt = $pdo->prepare(
                     "INSERT INTO chapters (course_id, title, description, `order`)
                      VALUES (?, ?, ?, ?)"
                 );
-                $stmt->execute([$course_id, $title, $description, $order]);
+                $stmt->execute([$course_id, $title, $description, $next_order]);
                 $message = 'Chapter added successfully';
                 header('Location: course-editor.php?id=' . $course_id . '&message=' . urlencode($message));
                 exit;
@@ -97,11 +104,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type'])) {
             if (!$chapter_id || empty($title)) {
                 $error = 'Invalid section data';
             } else {
+                // Get the next order number for this chapter
+                $stmt = $pdo->prepare(
+                    "SELECT MAX(`order`) as max_order FROM sections WHERE chapter_id = ?"
+                );
+                $stmt->execute([$chapter_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $next_order = ($result['max_order'] ?? 0) + 1;
+                
                 $stmt = $pdo->prepare(
                     "INSERT INTO sections (chapter_id, title, description, type, `order`, video_url, video_duration_seconds, content)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 );
-                $stmt->execute([$chapter_id, $title, $description, $section_type, $order, $video_url, $video_duration, $content]);
+                $stmt->execute([$chapter_id, $title, $description, $section_type, $next_order, $video_url, $video_duration, $content]);
                 $section_id = $pdo->lastInsertId();
                 
                 $message = 'Section added successfully';
@@ -152,19 +167,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type'])) {
             $question_text = trim($_POST['question_text'] ?? '');
             $question_type = $_POST['question_type'] ?? 'multiple_choice';
             $points = (int)($_POST['points'] ?? 1);
-            $order = (int)($_POST['order'] ?? 1);
             
             if (!$section_id || empty($question_text)) {
                 $error = 'Invalid question data';
             } else {
+                // Get the next order number for this section
+                $stmt = $pdo->prepare(
+                    "SELECT MAX(`order`) as max_order FROM questions WHERE section_id = ?"
+                );
+                $stmt->execute([$section_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $next_order = ($result['max_order'] ?? 0) + 1;
+                
                 $stmt = $pdo->prepare(
                     "INSERT INTO questions (section_id, question_text, question_type, points, `order`)
                      VALUES (?, ?, ?, ?, ?)"
                 );
-                $stmt->execute([$section_id, $question_text, $question_type, $points, $order]);
+                $stmt->execute([$section_id, $question_text, $question_type, $points, $next_order]);
                 $question_id = $pdo->lastInsertId();
                 
                 $message = 'Question added successfully';
+                header('Location: course-editor.php?id=' . $course_id . '&action=edit_question&question_id=' . $question_id . '&message=' . urlencode($message));
+                exit;
+            }
+        }
+        
+        elseif ($_POST['type'] === 'edit_question') {
+            $question_id = (int)($_POST['question_id'] ?? 0);
+            $question_text = trim($_POST['question_text'] ?? '');
+            $question_type = $_POST['question_type'] ?? 'multiple_choice';
+            $points = (int)($_POST['points'] ?? 1);
+            
+            if (!$question_id || empty($question_text)) {
+                $error = 'Invalid question data';
+            } else {
+                $stmt = $pdo->prepare(
+                    "UPDATE questions SET question_text = ?, question_type = ?, points = ? WHERE id = ?"
+                );
+                $stmt->execute([$question_text, $question_type, $points, $question_id]);
+                
+                $message = 'Question updated successfully';
                 header('Location: course-editor.php?id=' . $course_id . '&action=edit_question&question_id=' . $question_id . '&message=' . urlencode($message));
                 exit;
             }
@@ -174,16 +216,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type'])) {
             $question_id = (int)($_POST['question_id'] ?? 0);
             $option_text = trim($_POST['option_text'] ?? '');
             $is_correct = isset($_POST['is_correct']) ? 1 : 0;
-            $order = (int)($_POST['option_order'] ?? 1);
             
             if (!$question_id || empty($option_text)) {
                 $error = 'Invalid option data';
             } else {
+                // Get the next order number for this question
+                $stmt = $pdo->prepare(
+                    "SELECT MAX(`order`) as max_order FROM question_options WHERE question_id = ?"
+                );
+                $stmt->execute([$question_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $next_order = ($result['max_order'] ?? 0) + 1;
+                
                 $stmt = $pdo->prepare(
                     "INSERT INTO question_options (question_id, option_text, is_correct, `order`)
                      VALUES (?, ?, ?, ?)"
                 );
-                $stmt->execute([$question_id, $option_text, $is_correct, $order]);
+                $stmt->execute([$question_id, $option_text, $is_correct, $next_order]);
                 $message = 'Option added successfully';
                 header('Location: course-editor.php?id=' . $course_id . '&action=edit_question&question_id=' . $question_id . '&message=' . urlencode($message));
                 exit;
@@ -224,7 +273,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type'])) {
                 exit;
             }
         }
+        
+        elseif ($_POST['type'] === 'reorder_sections') {
+            header('Content-Type: application/json');
+            
+            $chapter_id = (int)($_POST['chapter_id'] ?? 0);
+            $sections_json = $_POST['sections'] ?? '[]';
+            $sections = json_decode($sections_json, true);
+            
+            if (!$chapter_id) {
+                echo json_encode(['success' => false, 'error' => 'Invalid chapter ID']);
+                exit;
+            }
+            
+            if (!is_array($sections) || empty($sections)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid sections data']);
+                exit;
+            }
+            
+            // Verify chapter belongs to this course
+            $stmt = $pdo->prepare("SELECT id FROM chapters WHERE id = ? AND course_id = ?");
+            $stmt->execute([$chapter_id, $course_id]);
+            if (!$stmt->fetch()) {
+                echo json_encode(['success' => false, 'error' => 'Chapter not found']);
+                exit;
+            }
+            
+            // Use temporary order values to avoid constraint conflicts
+            // First, set all sections to negative temporary values
+            $temp_order = -1;
+            foreach ($sections as $section) {
+                if (isset($section['id'])) {
+                    $stmt = $pdo->prepare("UPDATE sections SET `order` = ? WHERE id = ? AND chapter_id = ?");
+                    $stmt->execute([$temp_order, $section['id'], $chapter_id]);
+                    $temp_order--;
+                }
+            }
+            
+            // Then update to final order values
+            foreach ($sections as $section) {
+                if (isset($section['id']) && isset($section['order'])) {
+                    $stmt = $pdo->prepare("UPDATE sections SET `order` = ? WHERE id = ? AND chapter_id = ?");
+                    $stmt->execute([$section['order'], $section['id'], $chapter_id]);
+                }
+            }
+            
+            echo json_encode(['success' => true]);
+            exit;
+        }
     } catch (Exception $e) {
+        // For AJAX requests, return JSON error response
+        if (isset($_POST['type']) && $_POST['type'] === 'reorder_sections') {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            exit;
+        }
         $error = $e->getMessage();
     }
 }
@@ -274,6 +377,7 @@ if (isset($_GET['message'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Course Editor - <?php echo htmlspecialchars($course['title']); ?></title>
     <link rel="stylesheet" href="<?php echo APP_URL; ?>/assets/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         .course-editor-layout {
             display: grid;
@@ -329,10 +433,22 @@ if (isset($_GET['message'])) {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
         }
         
         .chapter-header:hover {
             background: #f0f0f0;
+        }
+        
+        .chapter-arrow {
+            flex-shrink: 0;
+            font-size: 14px;
+            transition: transform 0.3s ease;
+            color: #667eea;
+        }
+        
+        .chapter-item.collapsed .chapter-arrow {
+            transform: rotate(-90deg);
         }
         
         .chapter-header h4 {
@@ -385,6 +501,27 @@ if (isset($_GET['message'])) {
         
         .section-item:hover {
             background: #f9f9f9;
+        }
+        
+        .sections-list.sortable {
+            /* Drag and drop styling */
+        }
+        
+        .section-item.sortable-ghost {
+            opacity: 0.5;
+            background: #e8eaf6 !important;
+        }
+        
+        .section-item.sortable-chosen {
+            background: #e8eaf6;
+        }
+        
+        .sections-list.drag-active .section-item {
+            cursor: grab;
+        }
+        
+        .sections-list.drag-active .section-item:active {
+            cursor: grabbing;
         }
         
         .section-item.active {
@@ -670,22 +807,26 @@ if (isset($_GET['message'])) {
                 <?php foreach ($course['chapters'] as $chapter): ?>
                     <div class="chapter-item">
                         <div class="chapter-header" onclick="toggleSections(this)">
+                            <span class="chapter-arrow">▼</span>
                             <h4><?php echo htmlspecialchars($chapter['title']); ?></h4>
                             <div class="chapter-actions">
                                 <button onclick="editChapter(<?php echo $chapter['id']; ?>); event.stopPropagation();">Edit</button>
                                 <button onclick="deleteChapter(<?php echo $chapter['id']; ?>); event.stopPropagation();" class="btn-danger">Del</button>
                             </div>
                         </div>
-                        <div class="sections-list">
+                        <div class="sections-list active" data-chapter-id="<?php echo $chapter['id']; ?>">
                             <div style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
                                 <button class="btn btn-primary btn-sm" onclick="addSection(<?php echo $chapter['id']; ?>)" style="width: 100%; font-size: 11px;">+ Add Section</button>
                             </div>
                             <?php if (isset($chapter['sections']) && is_array($chapter['sections'])): ?>
                                 <?php foreach ($chapter['sections'] as $section): ?>
-                                    <a href="course-editor.php?id=<?php echo $course_id; ?>&action=edit_section&section_id=<?php echo $section['id']; ?>" class="section-item <?php echo ($action === 'edit_section' && $_GET['section_id'] == $section['id']) ? 'active' : ''; ?>">
-                                        <span><?php echo htmlspecialchars(substr($section['title'], 0, 20)); ?></span>
+                                    <div class="section-item" data-section-id="<?php echo $section['id']; ?>" style="cursor: grab;">
+                                        <span style="color: #999; cursor: grab; flex-shrink: 0;">⋮⋮</span>
+                                        <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            <a href="course-editor.php?id=<?php echo $course_id; ?>&action=edit_section&section_id=<?php echo $section['id']; ?>" style="text-decoration: none; color: inherit;"><?php echo htmlspecialchars(substr($section['title'], 0, 20)); ?></a>
+                                        </span>
                                         <span class="section-type-badge"><?php echo ucfirst(substr($section['type'], 0, 3)); ?></span>
-                                    </a>
+                                    </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
@@ -722,7 +863,6 @@ if (isset($_GET['message'])) {
                     <div>
                         <h3>Course Details</h3>
                         <p><strong>Instructor:</strong> <?php echo htmlspecialchars($course['instructor_name'] ?? 'Not set'); ?></p>
-                        <p><strong>Difficulty:</strong> <?php echo ucfirst($course['difficulty_level']); ?></p>
                         <p><strong>Duration:</strong> <?php echo $course['duration_hours'] ?? 'Not set'; ?> hours</p>
                         <p><strong>Pass Percentage:</strong> <?php echo $course['pass_percentage']; ?>%</p>
                     </div>
@@ -770,14 +910,6 @@ if (isset($_GET['message'])) {
                         <div class="form-group">
                             <label for="instructor_name">Instructor Name</label>
                             <input type="text" id="instructor_name" name="instructor_name" value="<?php echo htmlspecialchars($course['instructor_name'] ?? ''); ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="difficulty_level">Difficulty Level</label>
-                            <select id="difficulty_level" name="difficulty_level">
-                                <option value="beginner" <?php echo $course['difficulty_level'] === 'beginner' ? 'selected' : ''; ?>>Beginner</option>
-                                <option value="intermediate" <?php echo $course['difficulty_level'] === 'intermediate' ? 'selected' : ''; ?>>Intermediate</option>
-                                <option value="advanced" <?php echo $course['difficulty_level'] === 'advanced' ? 'selected' : ''; ?>>Advanced</option>
-                            </select>
                         </div>
                     </div>
                     
@@ -898,8 +1030,8 @@ if (isset($_GET['message'])) {
                 
                 <form method="POST" class="form-section">
                     <h3>Question Details</h3>
-                    <input type="hidden" name="type" value="edit_section">
-                    <input type="hidden" name="section_id" value="<?php echo $current_question['section_id']; ?>">
+                    <input type="hidden" name="type" value="edit_question">
+                    <input type="hidden" name="question_id" value="<?php echo $current_question['id']; ?>">
                     
                     <div class="form-group">
                         <label for="q_text">Question Text *</label>
@@ -1080,6 +1212,65 @@ if (isset($_GET['message'])) {
         function updateSectionType(type) {
             document.getElementById('video-fields').style.display = type === 'video' ? 'block' : 'none';
             document.getElementById('content-field').style.display = ['reading', 'assignment'].includes(type) ? 'block' : 'none';
+        }
+        
+        // Initialize drag and drop for all section lists
+        document.addEventListener('DOMContentLoaded', function() {
+            const sectionLists = document.querySelectorAll('.sections-list');
+            
+            sectionLists.forEach(list => {
+                // Find the actual items container (skip the add button)
+                const items = list.querySelectorAll('.section-item');
+                
+                new Sortable(list, {
+                    group: 'sections-' + list.dataset.chapterId,
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    onStart: function(evt) {
+                        list.classList.add('drag-active');
+                    },
+                    onEnd: function(evt) {
+                        list.classList.remove('drag-active');
+                        
+                        // Get new order
+                        const sectionItems = list.querySelectorAll('.section-item');
+                        const newOrder = Array.from(sectionItems).map((item, index) => ({
+                            id: item.dataset.sectionId,
+                            order: index + 1
+                        }));
+                        
+                        // Send to server
+                        updateSectionOrder(list.dataset.chapterId, newOrder);
+                    },
+                    filter: '.btn, button', // Don't drag buttons
+                    preventOnFilter: false
+                });
+            });
+        });
+        
+        function updateSectionOrder(chapterId, sections) {
+            console.log('Saving section order:', { chapterId, sections });
+            
+            const formData = new FormData();
+            formData.append('type', 'reorder_sections');
+            formData.append('chapter_id', chapterId);
+            formData.append('sections', JSON.stringify(sections));
+            
+            fetch('course-editor.php?id=<?php echo $course_id; ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('✓ Section order saved successfully');
+                } else {
+                    console.error('✗ Failed to save order:', data.error || 'Unknown error');
+                }
+            })
+            .catch(error => console.error('✗ Error:', error));
         }
     </script>
 </body>

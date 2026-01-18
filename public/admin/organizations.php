@@ -140,24 +140,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = $e->getMessage();
             }
         }
-    } elseif ($action === 'delete' && isset($_GET['id'])) {
-        $id = (int)$_GET['id'];
-        
-        try {
-            $org = $userModel->findById($id);
-            if ($org && $org['role'] === ROLE_ORGANIZATION) {
-                $userModel->delete($id);
-                Utils::auditLog($pdo, $adminUser['id'], 'DELETE', 'user', $id, 'Deleted organization: ' . $org['organization_name']);
-                
-                $message = 'Organization deleted successfully';
-                header('Location: organizations.php?message=' . urlencode($message));
-                exit;
-            } else {
-                $error = 'Organization not found';
-            }
-        } catch (Exception $e) {
-            $error = $e->getMessage();
+    }
+}
+
+// Handle delete action (moved outside POST block to handle GET requests)
+if ($action === 'delete' && isset($_GET['id'])) {
+    $id = (int)$_GET['id'];
+    
+    try {
+        $org = $userModel->findById($id);
+        if ($org && $org['role'] === ROLE_ORGANIZATION) {
+            $userModel->delete($id);
+            Utils::auditLog($pdo, $adminUser['id'], 'DELETE', 'user', $id, 'Deleted organization: ' . $org['organization_name']);
+            
+            $message = 'Organization deleted successfully';
+            header('Location: organizations.php?message=' . urlencode($message));
+            exit;
+        } else {
+            $error = 'Organization not found';
         }
+    } catch (Exception $e) {
+        $error = $e->getMessage();
     }
 }
 
@@ -171,8 +174,65 @@ if ($action === 'edit' && isset($_GET['id'])) {
     }
 }
 
-// Get all organization users
-$organizations = $userModel->findByRole(ROLE_ORGANIZATION);
+// Helper function to get assigned courses for an organization
+function getOrganizationCourses($pdo, $org_id) {
+    $stmt = $pdo->prepare(
+        "SELECT c.* FROM courses c
+         INNER JOIN organization_courses oc ON c.id = oc.course_id
+         WHERE oc.organization_id = ?
+         ORDER BY c.title ASC"
+    );
+    $stmt->execute([$org_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Get all organization users with search and filter
+if ($action === 'list') {
+    $page = (int)($_GET['page'] ?? 1);
+    $search = trim($_GET['search'] ?? '');
+    $status_filter = $_GET['status'] ?? '';
+    
+    // Build query with search and filters
+    $where = [];
+    $params = [];
+    
+    if ($search) {
+        $where[] = "(organization_name LIKE ? OR email LIKE ? OR organization_contact_person LIKE ?)";
+        $search_term = "%$search%";
+        $params[] = $search_term;
+        $params[] = $search_term;
+        $params[] = $search_term;
+    }
+    
+    if ($status_filter) {
+        $where[] = "status = ?";
+        $params[] = $status_filter;
+    }
+    
+    $where[] = "role = ?";
+    $params[] = ROLE_ORGANIZATION;
+    
+    $whereClause = "WHERE " . implode(" AND ", $where);
+    
+    // Get total count
+    $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM users $whereClause");
+    $countStmt->execute($params);
+    $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    $pagination = Utils::getPagination($page, $total);
+    $limit = (int)$pagination['limit'];
+    $offset = (int)$pagination['offset'];
+    
+    // Get filtered and paginated organizations
+    $sql = "SELECT * FROM users $whereClause ORDER BY created_at DESC LIMIT $limit OFFSET $offset";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $organizations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $organizations = $userModel->findByRole(ROLE_ORGANIZATION);
+    $search = '';
+    $status_filter = '';
+}
 
 if (isset($_GET['message'])) {
     $message = $_GET['message'];
@@ -285,6 +345,79 @@ if (isset($_GET['message'])) {
             color: #333;
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
+        }
+
+        .org-courses {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .org-courses h4 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .courses-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .course-item {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .course-item-info {
+            flex: 1;
+        }
+
+        .course-item-title {
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 4px 0;
+        }
+
+        .course-item-meta {
+            font-size: 12px;
+            color: #666;
+            margin: 0;
+        }
+
+        .course-status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .course-status-draft {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .course-status-published {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .no-courses {
+            color: #666;
+            font-size: 13px;
+            font-style: italic;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            text-align: center;
         }
     </style>
 </head>
@@ -435,8 +568,46 @@ if (isset($_GET['message'])) {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                         <h2>Organization Accounts</h2>
                         <a href="organizations.php?action=create" class="btn btn-primary">+ Create Organization</a>
-                    </div>            <?php if (empty($organizations)): ?>
-                    <p style="text-align: center; color: #666;">No organizations found. <a href="organizations.php?action=create">Create one now</a>.</p>
+                    </div>
+                    
+                    <!-- Search and Filter Bar -->
+                    <div style="margin-bottom: 20px; display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; align-items: end;">
+                        <div>
+                            <form method="GET" style="display: flex; gap: 10px;">
+                                <input type="hidden" name="action" value="list">
+                                <input type="text" name="search" placeholder="Search by name, email..." value="<?php echo htmlspecialchars($search); ?>" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">Search</button>
+                                <?php if ($search || $status_filter): ?>
+                                    <a href="organizations.php" class="btn btn-secondary" style="padding: 10px 20px;">Clear</a>
+                                <?php endif; ?>
+                            </form>
+                        </div>
+                        <form method="GET" style="display: flex; gap: 5px;">
+                            <input type="hidden" name="action" value="list">
+                            <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                            <select name="status" onchange="this.form.submit()" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <option value="">All Statuses</option>
+                                <option value="active" <?php echo $status_filter === 'active' ? 'selected' : ''; ?>>Active</option>
+                                <option value="inactive" <?php echo $status_filter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                <option value="suspended" <?php echo $status_filter === 'suspended' ? 'selected' : ''; ?>>Suspended</option>
+                            </select>
+                        </form>
+                    </div>
+                    
+                    <!-- Search Results Info -->
+                    <?php if ($search || $status_filter): ?>
+                        <div style="margin-bottom: 20px; padding: 10px; background: #e8f4f8; border-radius: 5px; font-size: 13px; color: #0066cc;">
+                            <?php 
+                            $filter_text = [];
+                            if ($search) $filter_text[] = "name/email containing '" . htmlspecialchars($search) . "'";
+                            if ($status_filter) $filter_text[] = "status = " . ucfirst($status_filter);
+                            echo "Showing organizations matching: " . implode(" and ", $filter_text) . " (" . $total . " results)";
+                            ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (empty($organizations)): ?>
+                    <p style="text-align: center; color: #666; padding: 40px;">No organizations found. <?php if ($search || $status_filter): ?>Try adjusting your search or filters.<?php else: ?><a href="organizations.php?action=create">Create one now</a>.<?php endif; ?></p>
             <?php else: ?>
                     <?php foreach ($organizations as $org): ?>
                         <div class="org-card">
@@ -467,6 +638,37 @@ if (isset($_GET['message'])) {
                                 </p>
                             <?php endif; ?>
 
+                            <!-- Assigned Courses -->
+                            <?php 
+                            $courses = getOrganizationCourses($pdo, $org['id']);
+                            ?>
+                            <div class="org-courses">
+                                <h4>📚 Assigned Courses (<?php echo count($courses); ?>)</h4>
+                                <?php if (empty($courses)): ?>
+                                    <div class="no-courses">No courses assigned yet</div>
+                                <?php else: ?>
+                                    <div class="courses-list">
+                                        <?php foreach ($courses as $course): ?>
+                                            <div class="course-item">
+                                                <div class="course-item-info">
+                                                    <p class="course-item-title"><?php echo htmlspecialchars($course['title']); ?></p>
+                                                    <p class="course-item-meta">
+                                                        <?php if ($course['instructor_name']): ?>
+                                                            👤 <?php echo htmlspecialchars($course['instructor_name']); ?> • 
+                                                        <?php endif; ?>
+                                                        <?php if ($course['duration_hours']): ?>
+                                                            ⏱️ <?php echo htmlspecialchars($course['duration_hours']); ?> hours
+                                                        <?php endif; ?>
+                                                    </p>
+                                                </div>
+                                                <span class="course-status-badge course-status-<?php echo $course['status']; ?>">
+                                                    <?php echo ucfirst(str_replace('_', ' ', $course['status'])); ?>
+                                                </span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                             <div class="org-actions">
                                 <a href="organizations.php?action=edit&id=<?php echo $org['id']; ?>" class="btn-edit">Edit</a>
                                 <a href="organizations.php?action=delete&id=<?php echo $org['id']; ?>" class="btn-delete" onclick="return confirm('Are you sure you want to delete this organization?');">Delete</a>

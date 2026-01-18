@@ -17,8 +17,39 @@ $courseModel = new CourseModel($pdo);
 $progressModel = new ProgressModel($pdo);
 $user = Auth::getCurrentUser();
 
+$search = trim($_GET['search'] ?? '');
+$difficulty_filter = $_GET['difficulty'] ?? '';
+$progress_filter = $_GET['progress'] ?? '';
+
 // Get student's courses
-$student_courses = $progressModel->getStudentCourses($user['id']);
+$all_courses = $progressModel->getStudentCourses($user['id']);
+
+// Filter courses based on search and filters
+$student_courses = array_filter($all_courses, function($course) use ($search, $difficulty_filter, $progress_filter) {
+    if ($search) {
+        $search_lower = strtolower($search);
+        if (stripos($course['title'], $search_lower) === false && 
+            stripos($course['description'] ?? '', $search_lower) === false) {
+            return false;
+        }
+    }
+    
+    if ($difficulty_filter && $course['difficulty_level'] !== $difficulty_filter) {
+        return false;
+    }
+    
+    if ($progress_filter) {
+        if ($progress_filter === 'not_started' && $course['progress_percentage'] != 0) {
+            return false;
+        } elseif ($progress_filter === 'in_progress' && ($course['progress_percentage'] == 0 || $course['progress_percentage'] == 100)) {
+            return false;
+        } elseif ($progress_filter === 'completed' && $course['progress_percentage'] != 100) {
+            return false;
+        }
+    }
+    
+    return true;
+});
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -78,7 +109,6 @@ $student_courses = $progressModel->getStudentCourses($user['id']);
                                 </div>
                                 
                                 <p style="color: #666; font-size: 13px; margin: 10px 0;">
-                                    Difficulty: <strong><?php echo ucfirst($course['difficulty_level']); ?></strong><br>
                                     Status: <strong><?php echo ucfirst($course['course_status']); ?></strong>
                                 </p>
                                 

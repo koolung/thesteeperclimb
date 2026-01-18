@@ -100,10 +100,45 @@ if (isset($_GET['message'])) {
 
 if ($action === 'list') {
     $page = (int)($_GET['page'] ?? 1);
-    $total = $userModel->countStudentsByOrganization($user['id']);
-    $pagination = Utils::getPagination($page, $total);
+    $search = trim($_GET['search'] ?? '');
+    $status_filter = $_GET['status'] ?? '';
     
-    $students = $userModel->findStudentsByOrganization($user['id'], $pagination['limit'], $pagination['offset']);
+    // Build query with search and filters
+    $where = ["organization_id = ?"];
+    $params = [$user['id']];
+    
+    if ($search) {
+        $where[] = "(first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)";
+        $search_term = "%$search%";
+        $params[] = $search_term;
+        $params[] = $search_term;
+        $params[] = $search_term;
+    }
+    
+    if ($status_filter) {
+        $where[] = "status = ?";
+        $params[] = $status_filter;
+    }
+    
+    $where[] = "role = ?";
+    $params[] = ROLE_STUDENT;
+    
+    $whereClause = "WHERE " . implode(" AND ", $where);
+    
+    // Get total count
+    $countStmt = $pdo->prepare("SELECT COUNT(*) as total FROM users $whereClause");
+    $countStmt->execute($params);
+    $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    $pagination = Utils::getPagination($page, $total);
+    $limit = (int)$pagination['limit'];
+    $offset = (int)$pagination['offset'];
+    
+    // Get filtered and paginated students
+    $sql = "SELECT * FROM users $whereClause ORDER BY created_at DESC LIMIT $limit OFFSET $offset";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -153,33 +188,74 @@ if ($action === 'list') {
             
             <?php if ($action === 'list'): ?>
                 <section class="content-section">
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Added</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($students as $student): ?>
-                                    <tr>
-                                        <td><strong><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></strong></td>
-                                        <td><?php echo htmlspecialchars($student['email']); ?></td>
-                                        <td><span class="badge badge-<?php echo strtolower($student['status']); ?>"><?php echo ucfirst($student['status']); ?></span></td>
-                                        <td><?php echo Utils::formatDate($student['created_at']); ?></td>
-                                        <td>
-                                            <a href="students.php?action=edit&id=<?php echo $student['id']; ?>" class="btn btn-sm btn-primary">Edit</a>
-                                            <a href="students.php?action=delete&id=<?php echo $student['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <!-- Search and Filter Bar -->
+                    <div style="margin-bottom: 20px; display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; align-items: end;">
+                        <div>
+                            <form method="GET" style="display: flex; gap: 10px;">
+                                <input type="hidden" name="action" value="list">
+                                <input type="text" name="search" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ?>" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">Search</button>
+                                <?php if ($search || $status_filter): ?>
+                                    <a href="students.php" class="btn btn-secondary" style="padding: 10px 20px;">Clear</a>
+                                <?php endif; ?>
+                            </form>
+                        </div>
+                        <form method="GET" style="display: flex; gap: 5px;">
+                            <input type="hidden" name="action" value="list">
+                            <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                            <select name="status" onchange="this.form.submit()" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+                                <option value="">All Statuses</option>
+                                <option value="active" <?php echo $status_filter === 'active' ? 'selected' : ''; ?>>Active</option>
+                                <option value="inactive" <?php echo $status_filter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                            </select>
+                        </form>
                     </div>
+                    
+                    <!-- Search Results Info -->
+                    <?php if ($search || $status_filter): ?>
+                        <div style="margin-bottom: 20px; padding: 10px; background: #e8f4f8; border-radius: 5px; font-size: 13px; color: #0066cc;">
+                            <?php 
+                            $filter_text = [];
+                            if ($search) $filter_text[] = "name/email containing '" . htmlspecialchars($search) . "'";
+                            if ($status_filter) $filter_text[] = "status = " . ucfirst($status_filter);
+                            echo "Showing students matching: " . implode(" and ", $filter_text) . " (" . $total . " results)";
+                            ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (empty($students)): ?>
+                        <div style="padding: 40px; text-align: center; color: #999;">
+                            <p>No students found. <?php if ($search || $status_filter): ?>Try adjusting your search or filters.<?php else: ?><a href="students.php?action=add">Add your first student</a>.<?php endif; ?></p>
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                        <th>Added</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($students as $student): ?>
+                                        <tr>
+                                            <td><strong><?php echo htmlspecialchars($student['first_name'] . ' ' . $student['last_name']); ?></strong></td>
+                                            <td><?php echo htmlspecialchars($student['email']); ?></td>
+                                            <td><span class="badge badge-<?php echo strtolower($student['status']); ?>"><?php echo ucfirst($student['status']); ?></span></td>
+                                            <td><?php echo Utils::formatDate($student['created_at']); ?></td>
+                                            <td>
+                                                <a href="students.php?action=edit&id=<?php echo $student['id']; ?>" class="btn btn-sm btn-primary">Edit</a>
+                                                <a href="students.php?action=delete&id=<?php echo $student['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?')">Delete</a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </section>
             
             <?php elseif ($action === 'add'): ?>
