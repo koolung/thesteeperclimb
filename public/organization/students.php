@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../src/Auth/Auth.php';
 require_once __DIR__ . '/../../src/Models/UserModel.php';
 require_once __DIR__ . '/../../src/Utils/Utils.php';
+require_once __DIR__ . '/../../src/Utils/Mailer.php';
 
 $pdo = getMainDatabaseConnection();
 Auth::initialize($pdo);
@@ -22,20 +23,44 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add') {
         $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
         $first_name = trim($_POST['first_name'] ?? '');
         $last_name = trim($_POST['last_name'] ?? '');
         
-        if (empty($email) || empty($password) || empty($first_name) || empty($last_name)) {
-            $error = 'All fields are required';
+        if (empty($email) || empty($first_name) || empty($last_name)) {
+            $error = 'Email, first name, and last name are required';
         } else {
             try {
-                Auth::register($email, $password, $first_name, $last_name, ROLE_STUDENT, $user['id']);
-                
-                Utils::auditLog($pdo, $user['id'], 'CREATE_STUDENT', 'user', null, "Created student: $email");
-                
-                header('Location: students.php?message=Student added successfully');
-                exit;
+                // Check if email already exists
+                if ($userModel->findByEmail($email)) {
+                    $error = 'An account with this email already exists';
+                } else {
+                    // Create student with temporary password
+                    $tempPassword = bin2hex(random_bytes(16));
+                    $studentId = $userModel->create([
+                        'email' => $email,
+                        'password_hash' => password_hash($tempPassword, PASSWORD_BCRYPT),
+                        'first_name' => $first_name,
+                        'last_name' => $last_name,
+                        'role' => ROLE_STUDENT,
+                        'status' => STATUS_ACTIVE,
+                        'organization_id' => $user['id']
+                    ]);
+                    
+                    Utils::auditLog($pdo, $user['id'], 'CREATE_STUDENT', 'user', $studentId, "Created student: $email");
+                    
+                    // Send welcome email with setup link
+                    $setupLink = APP_URL . '/public/setup/password-reset.php?org_id=' . $studentId . '&email=' . urlencode($email);
+                    $emailSent = Utils\Mailer::sendStudentWelcome($email, $first_name . ' ' . $last_name, $user['organization_name'], $setupLink);
+                    
+                    if ($emailSent) {
+                        $message = 'Student account created successfully. Welcome email sent to ' . htmlspecialchars($email);
+                    } else {
+                        $message = 'Student account created successfully, but welcome email could not be sent.';
+                    }
+                    
+                    header('Location: students.php?message=' . urlencode($message));
+                    exit;
+                }
             } catch (Exception $e) {
                 $error = $e->getMessage();
             }
@@ -277,14 +302,14 @@ if ($action === 'list') {
                             <input type="email" id="email" name="email" required>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="password">Password *</label>
-                            <input type="password" id="password" name="password" required>
-                            <small>At least 8 characters with uppercase, number, and special character</small>
+                        <div class="form-group" style="background: #e8f4f8; padding: 12px; border-radius: 5px; border-left: 4px solid #0066cc; margin-bottom: 20px;">
+                            <p style="margin: 0; color: #0066cc; font-size: 13px;">
+                                💡 The student will receive an email to set up their password and log in.
+                            </p>
                         </div>
                         
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">Add Student</button>
+                            <button type="submit" class="btn btn-primary">Create Student Account</button>
                             <a href="students.php" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>

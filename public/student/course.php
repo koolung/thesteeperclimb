@@ -168,8 +168,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section_id']) && !iss
             // Calculate percentage
             $score_percentage = $total_points > 0 ? round(($earned_points / $total_points) * 100) : 0;
             
-            // If perfect score, mark section as complete
-            if ($score_percentage === 100) {
+            // Count how many questions were answered
+            $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM questions WHERE section_id = ?");
+            $stmt->execute([$section_id]);
+            $total_questions = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            
+            $stmt = $pdo->prepare(
+                "SELECT COUNT(*) as count FROM student_answers 
+                 WHERE student_id = ? AND question_id IN (SELECT id FROM questions WHERE section_id = ?)
+                 AND answer_text IS NOT NULL AND answer_text != ''"
+            );
+            $stmt->execute([$user['id'], $section_id]);
+            $answered_questions = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            
+            // Mark section as complete if all questions are answered
+            if ($answered_questions === $total_questions && $total_questions > 0) {
                 $progressModel->completeSection($user['id'], $section_id);
                 $new_percentage = $progressModel->updateProgress($user['id'], $course_id);
                 
@@ -179,15 +192,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section_id']) && !iss
                     $cert_id = $certModel->issueCertificate($user['id'], $course_id, 100);
                     
                     if ($cert_id) {
-                        header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=Perfect score! Course completed. Certificate issued.');
+                        header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=All questions answered! Course completed. Certificate issued.');
                         exit;
                     }
                 }
                 
-                header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=Perfect score! Section completed.');
+                header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=All questions answered! Section completed.');
                 exit;
             } else {
-                header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=Quiz submitted. You scored ' . $score_percentage . '%. You need 100% to pass.');
+                header('Location: course.php?id=' . $course_id . '&section_id=' . $section_id . '&message=Response submitted. (' . $answered_questions . '/' . $total_questions . ' questions answered)');
                 exit;
             }
         } catch (Exception $e) {
@@ -267,41 +280,37 @@ if ($current_section) {
     
     $current_section_completed = in_array($current_section['id'], $completed_sections_list);
     
-    // For quiz sections, check if they got full points
+    // For quiz sections, check if all questions are answered
     if ($current_section['type'] === 'quiz' && !$current_section_completed) {
-        // Get all questions and their points
-        $stmt = $pdo->prepare("SELECT SUM(points) as total_points FROM questions WHERE section_id = ?");
+        // Get total number of questions
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM questions WHERE section_id = ?");
         $stmt->execute([$current_section['id']]);
-        $quiz_data = $stmt->fetch(PDO::FETCH_ASSOC);
-        $quiz_total = $quiz_data['total_points'] ?? 0;
+        $total_qs = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         
-        if ($quiz_total > 0) {
-            // Get student's score on this quiz
-            $stmt = $pdo->prepare(
-                "SELECT SUM(q.points) as earned_points FROM student_answers sa
-                 INNER JOIN questions q ON sa.question_id = q.id
-                 WHERE sa.student_id = ? AND q.section_id = ? AND sa.is_correct = 1"
-            );
-            $stmt->execute([$user['id'], $current_section['id']]);
-            $quiz_result = $stmt->fetch(PDO::FETCH_ASSOC);
-            $student_score = $quiz_result['earned_points'] ?? 0;
-            
-            // Check if they got full score
-            if ($student_score > 0 && $student_score >= $quiz_total) {
-                $current_section_completed = true;
-                // Mark as completed if not already done
-                try {
-                    $stmt = $pdo->prepare(
-                        "INSERT IGNORE INTO section_completion (student_id, section_id, completed_at)
-                         VALUES (?, ?, NOW())"
-                    );
-                    $stmt->execute([$user['id'], $current_section['id']]);
-                } catch (Exception $e) {
-                    // Already completed
-                }
-            } else {
-                $completion_requirement = 'You must score 100% on this quiz to proceed to the next section.';
+        // Get number of answered questions
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) as answered FROM student_answers 
+             WHERE student_id = ? AND question_id IN (SELECT id FROM questions WHERE section_id = ?)
+             AND answer_text IS NOT NULL AND answer_text != ''"
+        );
+        $stmt->execute([$user['id'], $current_section['id']]);
+        $answered_qs = $stmt->fetch(PDO::FETCH_ASSOC)['answered'];
+        
+        // Check if all questions are answered
+        if ($total_qs > 0 && $answered_qs === $total_qs) {
+            $current_section_completed = true;
+            // Mark as completed if not already done
+            try {
+                $stmt = $pdo->prepare(
+                    "INSERT IGNORE INTO section_completion (student_id, section_id, completed_at)
+                     VALUES (?, ?, NOW())"
+                );
+                $stmt->execute([$user['id'], $current_section['id']]);
+            } catch (Exception $e) {
+                // Already completed
             }
+        } else {
+            $completion_requirement = 'You must answer all questions to proceed to the next section.';
         }
     } elseif ($current_section['type'] !== 'quiz' && !$current_section_completed) {
         $completion_requirement = 'You must mark this section as complete before proceeding.';
@@ -534,6 +543,38 @@ if ($current_section) {
             text-decoration: underline;
         }
         
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-toggle:hover {
+            background: #764ba2;
+        }
+        
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 998;
+        }
+        
         .section-navigation {
             display: flex;
             justify-content: space-between;
@@ -588,13 +629,50 @@ if ($current_section) {
             }
             
             .sidebar {
-                position: static;
-                top: auto;
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 300px;
+                height: 100vh;
+                max-height: 100vh;
+                overflow-y: auto;
+                z-index: 1000;
+                transition: transform 0.3s ease-in-out;
+                transform: translateX(-100%);
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+                border-radius: 0;
+                padding-top: 20px;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-overlay.show {
+                display: block;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .button-group {
+                flex-direction: column !important;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Mobile Toggle Button -->
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰</button>
+    
+    <!-- Mobile Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+    
     <div class="course-container">
         <!-- Sidebar - Course Navigation -->
         <div class="sidebar">
@@ -720,8 +798,8 @@ if ($current_section) {
                                         // Vimeo embed
                                         echo '<iframe src="' . htmlspecialchars($current_section['video_url']) . '" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
                                     } else {
-                                        // Local video file
-                                        echo '<video width="100%" height="100%" controls><source src="' . htmlspecialchars($current_section['video_url']) . '" type="video/mp4">Your browser does not support the video tag.</video>';
+                                        // Local video file - disable download
+                                        echo '<video width="100%" height="100%" controls controlsList="nodownload"><source src="' . htmlspecialchars($current_section['video_url']) . '" type="video/mp4">Your browser does not support the video tag.</video>';
                                     }
                                 ?>
                             </div>
@@ -755,31 +833,34 @@ if ($current_section) {
                         $stmt = $pdo->prepare(
                             "SELECT SUM(q.points) as total_points, SUM(CASE WHEN sa.is_correct = 1 THEN q.points ELSE 0 END) as earned_points
                              FROM questions q
-                             INNER JOIN student_answers sa ON q.id = sa.question_id AND sa.student_id = ?
-                             WHERE q.section_id = ?"
+                             INNER JOIN student_answers sa ON q.id = sa.question_id
+                             WHERE q.section_id = ? AND sa.student_id = ? 
+                             AND sa.answer_text IS NOT NULL AND sa.answer_text != ''"
                         );
-                        $stmt->execute([$user['id'], $current_section['id']]);
+                        $stmt->execute([$current_section['id'], $user['id']]);
                         $result = $stmt->fetch(PDO::FETCH_ASSOC);
                         $quiz_total = $result['total_points'] ?? 0;
                         $quiz_earned = $result['earned_points'] ?? 0;
                         $quiz_score = $quiz_total > 0 ? round(($quiz_earned / $quiz_total) * 100) : 0;
                         
-                        // Check if student has attempted this quiz
+                        // Check if student has attempted this quiz (answered at least one question in this section)
                         $stmt = $pdo->prepare(
-                            "SELECT COUNT(*) as count FROM student_answers 
-                             WHERE student_id = ? AND question_id IN (SELECT id FROM questions WHERE section_id = ?)"
+                            "SELECT COUNT(*) as count FROM student_answers sa
+                             INNER JOIN questions q ON sa.question_id = q.id
+                             WHERE q.section_id = ? AND sa.student_id = ?
+                             AND sa.answer_text IS NOT NULL AND sa.answer_text != ''"
                         );
-                        $stmt->execute([$user['id'], $current_section['id']]);
+                        $stmt->execute([$current_section['id'], $user['id']]);
                         $has_attempted = $stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0;
                         
                         if ($has_attempted && $quiz_score > 0): ?>
                             <div style="background: <?php echo $quiz_score >= 100 ? '#d4edda' : '#fff3cd'; ?>; border: 1px solid <?php echo $quiz_score >= 100 ? '#c3e6cb' : '#ffeaa7'; ?>; border-left: 4px solid <?php echo $quiz_score >= 100 ? '#28a745' : '#ffc107'; ?>; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: <?php echo $quiz_score >= 100 ? '#155724' : '#856404'; ?>;">
-                                <strong><?php echo $quiz_score >= 100 ? '✓ Passed!' : '⚠️ Not Passed'; ?></strong>
+                                <strong><?php echo $quiz_score >= 100 ? '✓ Completed!' : '⚠️ Not Completed'; ?></strong>
                                 <p style="margin: 10px 0 0 0;">
-                                    Your Score: <strong><?php echo $quiz_score; ?>%</strong> (<?php echo $quiz_earned; ?>/<?php echo $quiz_total; ?> points)
+                                    Responses: <strong><?php echo $quiz_score; ?>%</strong> (<?php echo $quiz_earned; ?>/<?php echo $quiz_total; ?> )
                                 </p>
                                 <?php if ($quiz_score < 100): ?>
-                                    <p style="margin: 5px 0 0 0; font-size: 13px;">You need to score 100% to pass this quiz and move to the next section.</p>
+                                    <p style="margin: 5px 0 0 0; font-size: 13px;">You need to respond to all the questions to proceed to the next section.</p>
                                 <?php endif; ?>
                             </div>
                         <?php endif; ?>
@@ -790,14 +871,33 @@ if ($current_section) {
                         );
                         $stmt->execute([$current_section['id']]);
                         $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        // Fetch student's existing answers (only non-empty)
+                        $stmt = $pdo->prepare(
+                            "SELECT question_id, answer_text FROM student_answers 
+                             WHERE student_id = ? AND question_id IN (SELECT id FROM questions WHERE section_id = ?)
+                             AND answer_text IS NOT NULL AND answer_text != ''"
+                        );
+                        $stmt->execute([$user['id'], $current_section['id']]);
+                        $existing_answers = [];
+                        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                            $existing_answers[$row['question_id']] = $row['answer_text'];
+                        }
+                        
+                        // Check if all questions are answered
+                        $all_answered = count($existing_answers) === count($questions) && count($questions) > 0;
                         ?>
                         
                         <?php if (!empty($questions)): ?>
+                            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-left: 4px solid #0066cc; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; color: #004085;">
+                                <strong>📋 Progress:</strong> <?php echo count($existing_answers); ?> of <?php echo count($questions); ?> questions answered
+                            </div>
                             <form method="POST" style="margin-top: 20px;">
                                 <input type="hidden" name="section_id" value="<?php echo $current_section['id']; ?>">
                                 <?php foreach ($questions as $index => $question): ?>
-                                    <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ddd;">
-                                        <h4 style="margin-bottom: 10px;">Q<?php echo $index + 1; ?>. <?php echo htmlspecialchars($question['question_text']); ?> <span style="color: #667eea; font-weight: 600;">(<?php echo $question['points']; ?> pts)</span></h4>
+                                    <?php $answered = isset($existing_answers[$question['id']]); ?>
+                                    <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px; border: 1px solid <?php echo $answered ? '#d4edda' : '#ddd'; ?>; <?php echo $answered ? 'opacity: 0.8;' : ''; ?>">
+                                        <h4 style="margin-bottom: 10px;">Q<?php echo $index + 1; ?>. <?php echo htmlspecialchars($question['question_text']); ?> <?php echo $answered ? '<br/><span style="border-radius: 10px; color: white; padding: 2px 8px; background-color: #28a745; font-size: 0.8rem; font-weight: 600;">Answered</span>' : ''; ?></h4>
                                         
                                         <?php if (in_array($question['question_type'], ['multiple_choice', 'true_false'])): ?>
                                             <?php
@@ -809,21 +909,28 @@ if ($current_section) {
                                             ?>
                                             <div style="margin-left: 20px;">
                                                 <?php foreach ($options as $option): ?>
-                                                    <label style="display: block; margin-bottom: 8px; cursor: pointer;">
-                                                        <input type="radio" name="question_<?php echo $question['id']; ?>" value="<?php echo $option['id']; ?>" style="margin-right: 8px;">
+                                                    <label style="display: block; margin-bottom: 8px; cursor: pointer; <?php echo $answered ? 'opacity: 0.6;' : ''; ?>">
+                                                        <input type="radio" name="question_<?php echo $question['id']; ?>" value="<?php echo $option['id']; ?>" style="margin-right: 8px;" <?php echo $answered ? 'disabled' : ''; ?> <?php echo ($answered && $existing_answers[$question['id']] == $option['id']) ? 'checked' : ''; ?>>
                                                         <?php echo htmlspecialchars($option['option_text']); ?>
                                                     </label>
                                                 <?php endforeach; ?>
                                             </div>
                                         <?php elseif ($question['question_type'] === 'short_answer'): ?>
-                                            <input type="text" name="question_<?php echo $question['id']; ?>" placeholder="Your answer..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 20px;">
+                                            <input type="text" name="question_<?php echo $question['id']; ?>" placeholder="Your answer..." style="width: 90%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 20px;" value="<?php echo $answered ? htmlspecialchars($existing_answers[$question['id']]) : ''; ?>" <?php echo $answered ? 'readonly' : ''; ?>>
                                         <?php elseif ($question['question_type'] === 'essay'): ?>
-                                            <textarea name="question_<?php echo $question['id']; ?>" placeholder="Your essay answer..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 20px; min-height: 100px;"></textarea>
+                                            <textarea name="question_<?php echo $question['id']; ?>" placeholder="Your essay answer..." style="width: 90%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 20px; min-height: 100px;" <?php echo $answered ? 'readonly' : ''; ?>><?php echo $answered ? htmlspecialchars($existing_answers[$question['id']]) : ''; ?></textarea>
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                                 
-                                <button type="submit" class="complete-button" style="width: 100%; text-align: center;">Submit Quiz</button>
+                                <div style="display: flex; gap: 10px; margin-top: 20px;" class="button-group">
+                                    <button type="submit" class="complete-button" style="flex: 1;" <?php echo $all_answered ? 'disabled title="All questions already answered"' : ''; ?>>Submit Quiz</button>
+                                    <?php if ($has_attempted): ?>
+                                        <a href="download-responses.php?course_id=<?php echo $course_id; ?>&section_id=<?php echo $current_section['id']; ?>" class="complete-button" style="flex: 1; text-align: center; text-decoration: none; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); display: flex; align-items: center; justify-content: center;">
+                                            📥 Download Responses (PDF)
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                             </form>
                         <?php else: ?>
                             <p style="color: #999;">No questions in this quiz yet.</p>
@@ -935,6 +1042,32 @@ if ($current_section) {
             const sectionsList = element.nextElementSibling;
             sectionsList.classList.toggle('active');
         }
+        
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        }
+        
+        // Close sidebar when clicking on a section
+        document.querySelectorAll('.section-item').forEach(item => {
+            item.addEventListener('click', closeSidebar);
+        });
+        
+        // Close sidebar on window resize (when switching from mobile to desktop)
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                closeSidebar();
+            }
+        });
     </script>
 </body>
 </html>

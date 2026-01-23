@@ -16,11 +16,12 @@ $error = '';
 $success = '';
 
 // Get org_id and email from GET (initial page load) or POST (form submission)
+// Support both org_id (organizations) and student_id (students) parameters
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $org_id = isset($_POST['org_id']) ? (int)$_POST['org_id'] : 0;
+    $org_id = isset($_POST['org_id']) ? (int)$_POST['org_id'] : (int)($_POST['student_id'] ?? 0);
     $email = isset($_POST['email']) ? trim($_POST['email']) : '';
 } else {
-    $org_id = isset($_GET['org_id']) ? (int)$_GET['org_id'] : 0;
+    $org_id = isset($_GET['org_id']) ? (int)$_GET['org_id'] : (int)($_GET['student_id'] ?? 0);
     $email = isset($_GET['email']) ? trim(urldecode($_GET['email'])) : '';
 }
 
