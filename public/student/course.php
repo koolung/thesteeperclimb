@@ -17,6 +17,7 @@ Auth::requireRole(ROLE_STUDENT);
 
 $courseModel = new CourseModel($pdo);
 $progressModel = new ProgressModel($pdo);
+$certModel = new CertificateModel($pdo);
 $userModel = new UserModel($pdo);
 $user = Auth::getCurrentUser();
 
@@ -61,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             // Check if course is completed and issue certificate
             if ($new_percentage === 100) {
-                $certModel = new CertificateModel($pdo);
                 $cert_id = $certModel->issueCertificate($user['id'], $course_id, 100);
                 
                 if ($cert_id) {
@@ -188,7 +188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section_id']) && !iss
                 
                 // Check if course is completed
                 if ($new_percentage === 100) {
-                    $certModel = new CertificateModel($pdo);
                     $cert_id = $certModel->issueCertificate($user['id'], $course_id, 100);
                     
                     if ($cert_id) {
