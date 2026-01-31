@@ -1,12 +1,17 @@
 <?php
 /**
  * Application Configuration
+ * Loads sensitive values from environment variables
  */
 
+// Load environment variables
+require_once __DIR__ . '/environment.php';
+loadEnvironmentVariables();
+
 // Application settings
-define('APP_NAME', 'The Steeper Climb - Online Course Platform');
-define('APP_URL', 'http://localhost/thesteeperclimb');
-define('APP_ENV', 'development'); // development or production
+define('APP_NAME', getEnv('APP_NAME', 'The Steeper Climb - Online Course Platform'));
+define('APP_URL', getEnv('APP_URL', 'https://course.thesteeperclimb.ca'));
+define('APP_ENV', getEnv('APP_ENV', 'development')); // development or production
 
 // Session settings
 define('SESSION_LIFETIME', 3600); // 1 hour in seconds
@@ -53,8 +58,8 @@ define('PROGRESS_COMPLETED', 'completed');
 define('CERTIFICATION_THRESHOLD', 70); // 70% passing grade
 
 // Email settings (if needed)
-define('MAIL_FROM', 'noreply@thesteeperclimb.com');
-define('MAIL_FROM_NAME', 'The Steeper Climb');
+define('MAIL_FROM', getEnv('MAIL_FROM_EMAIL', 'noreply@thesteeperclimb.com'));
+define('MAIL_FROM_NAME', getEnv('MAIL_FROM_NAME', 'The Steeper Climb'));
 
 // Include database configuration
 require_once __DIR__ . '/database.php';

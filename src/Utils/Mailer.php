@@ -9,17 +9,39 @@ namespace Utils;
 // Load PHPMailer autoloader
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+// Load environment variables
+require_once __DIR__ . '/../../config/environment.php';
+\loadEnvironmentVariables();
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 class Mailer
 {
-    private static $host = 'smtp.titan.email';
-    private static $port = 465;
-    private static $username = 'thesteeperclimb@bedfordwebservices.com';
-    private static $password = 'X#ZK~3QbuW|W]3=';
-    private static $fromEmail = 'thesteeperclimb@bedfordwebservices.com';
-    private static $fromName = 'The Steeper Climb';
+    private static $host = null;
+    private static $port = null;
+    private static $username = null;
+    private static $password = null;
+    private static $fromEmail = null;
+    private static $fromName = null;
+
+    /**
+     * Initialize mail configuration from environment variables
+     */
+    private static function initializeConfig() {
+        if (self::$host === null) {
+            self::$host = \getEnv('MAIL_HOST', 'smtp.titan.email');
+            self::$port = (int)\getEnv('MAIL_PORT', '465');
+            self::$username = \getEnv('MAIL_USERNAME');
+            self::$password = \getEnv('MAIL_PASSWORD');
+            self::$fromEmail = \getEnv('MAIL_FROM_EMAIL');
+            self::$fromName = \getEnv('MAIL_FROM_NAME', 'The Steeper Climb');
+            
+            if (!self::$username || !self::$password || !self::$fromEmail) {
+                throw new Exception('Missing required mail environment variables');
+            }
+        }
+    }
 
     /**
      * Send an email using PHPMailer
@@ -27,6 +49,9 @@ class Mailer
     public static function send($to, $subject, $htmlBody, $textBody = '')
     {
         try {
+            // Initialize configuration from environment
+            self::initializeConfig();
+            
             // Create PHPMailer instance
             $mail = new PHPMailer(true);
 

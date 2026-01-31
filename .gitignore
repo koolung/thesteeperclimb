@@ -1,0 +1,14 @@
+# Environment configuration with credentials
+.env
+.env.local
+
+# Local course videos (do not version)
+public/uploads/videos/
+
+# Database configuration with credentials
+config/database.php
+
+# Optional: all large media
+*.mp4
+*.mov
+*.mkv
