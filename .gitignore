@@ -1,6 +1,13 @@
 # Environment configuration with credentials
 .env
-.env.local
+.env.*
+
+# SFTP configuration
+sftp.json
+.vscode/sftp.json
+
+# Database backups and exports
+u216830098_tsc*.sql
 
 # Local course videos (do not version)
 public/uploads/videos/
@@ -12,3 +19,4 @@ config/database.php
 *.mp4
 *.mov
 *.mkv
+
